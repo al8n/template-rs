@@ -1,0 +1,18 @@
+[package]
+name = "template-rs"
+version = "0.1.0"
+edition = "2021"
+repository = "https://github.com/al8n/template-rs"
+description = "A template for creating Rust open-source repo on GitHub"
+license = "MIT/Apache-2.0"
+
+[features]
+default = []
+
+[dependencies]
+
+[dev-dependencies]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

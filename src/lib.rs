@@ -12,6 +12,8 @@ pub fn it_works() -> usize {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_works() {
         assert_eq!(it_works(), 4);

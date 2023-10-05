@@ -1,10 +1,13 @@
 [package]
 name = "template-rs"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 repository = "https://github.com/al8n/template-rs"
+homepage = "https://github.com/al8n/template-rs"
+documentation = "https://docs.rs/template-rs"
 description = "A template for creating Rust open-source repo on GitHub"
 license = "MIT/Apache-2.0"
+minrust = "1.73"
 
 [[bench]]
 path = "benches/foo.rs"

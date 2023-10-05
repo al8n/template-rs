@@ -5,15 +5,15 @@
 
 /// template
 pub fn it_works() -> usize {
-    4
+  4
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+  use super::*;
 
-    #[test]
-    fn test_works() {
-        assert_eq!(it_works(), 4);
-    }
+  #[test]
+  fn test_works() {
+    assert_eq!(it_works(), 4);
+  }
 }

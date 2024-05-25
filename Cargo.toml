@@ -15,7 +15,9 @@ name = "foo"
 harness = false
 
 [features]
-default = []
+default = ["std"]
+alloc = []
+std = []
 
 [dependencies]
 

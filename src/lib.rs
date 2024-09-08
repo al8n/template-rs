@@ -10,9 +10,6 @@ extern crate alloc as std;
 #[cfg(all(feature = "std", not(feature = "alloc")))]
 extern crate std;
 
-#[cfg(all(feature = "std", feature = "alloc"))]
-extern crate std;
-
 /// template
 pub fn it_works() -> usize {
   4

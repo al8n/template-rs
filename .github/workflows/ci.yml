@@ -214,24 +214,33 @@ jobs:
         run: ci/sanitizer.sh
 
   miri-tb:
-    name: miri-tb-${{ matrix.os.target }}-${{ matrix.cfg }}
+    name: miri-tb-${{ matrix.target }}-${{ matrix.cfg }}
     strategy:
       matrix:
         os:
-          - name: ubuntu-latest
-            target:
-              - x86_64-unknown-linux-gnu
-              - i686-unknown-linux-gnu
-              - powerpc64-unknown-linux-gnu
-          - name: macos-latest
-            target:
-              - x86_64-apple-darwin
-              - aarch64-apple-darwin
-          - name: windows-latest
-            target:
+          - ubuntu-latest
+          - macos-latest
+        target:
+          - x86_64-unknown-linux-gnu
+          - i686-unknown-linux-gnu
+          - powerpc64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
         cfg:
           - all_tests
-    runs-on: ${{ matrix.os.name }}
+        # Exclude invalid combinations
+        exclude:
+          - os: ubuntu-latest
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: i686-unknown-linux-gnu
+          - os: macos-latest
+            target: powerpc64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
       - name: Cache cargo build and registry
@@ -246,29 +255,38 @@ jobs:
             ${{ runner.os }}-miri-
       - name: Install cargo-hack
         run: cargo install cargo-hack
-      - name: Miri (Linux)
+      - name: Miri
         run: |
-          bash ci/miri_tb.sh ${{ matrix.os.target }} ${{ matrix.cfg }}
+          bash ci/miri_tb.sh ${{ matrix.target }} ${{ matrix.cfg }}
 
   miri-sb:
-    name: miri-sb-${{ matrix.os.target }}-${{ matrix.cfg }}
+    name: miri-sb-${{ matrix.target }}-${{ matrix.cfg }}
     strategy:
       matrix:
         os:
-          - name: ubuntu-latest
-            target:
-              - x86_64-unknown-linux-gnu
-              - i686-unknown-linux-gnu
-              - powerpc64-unknown-linux-gnu
-          - name: macos-latest
-            target:
-              - x86_64-apple-darwin
-              - aarch64-apple-darwin
-          - name: windows-latest
-            target:
+          - ubuntu-latest
+          - macos-latest
+        target:
+          - x86_64-unknown-linux-gnu
+          - i686-unknown-linux-gnu
+          - powerpc64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
         cfg:
           - all_tests
-    runs-on: ${{ matrix.os.name }}
+        # Exclude invalid combinations
+        exclude:
+          - os: ubuntu-latest
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: i686-unknown-linux-gnu
+          - os: macos-latest
+            target: powerpc64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
       - name: Cache cargo build and registry
@@ -283,9 +301,9 @@ jobs:
             ${{ runner.os }}-miri-
       - name: Install cargo-hack
         run: cargo install cargo-hack
-      - name: Miri (Linux)
+      - name: Miri
         run: |
-          bash ci/miri_sb.sh ${{ matrix.os.target }} ${{ matrix.cfg }}
+          bash ci/miri_sb.sh ${{ matrix.target }} ${{ matrix.cfg }}
 
   loom:
     name: loom

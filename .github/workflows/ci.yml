@@ -214,20 +214,24 @@ jobs:
         run: ci/sanitizer.sh
 
   miri-tb:
-    name: miri-tb
+    name: miri-tb-${{ matrix.os.target }}-${{ matrix.cfg }}
     strategy:
       matrix:
         os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-        target:
-          - x86_64-unknown-linux-gnu
-          - i686-unknown-linux-gnu
-          - powerpc64-unknown-linux-gnu
+          - name: ubuntu-latest
+            target:
+              - x86_64-unknown-linux-gnu
+              - i686-unknown-linux-gnu
+              - powerpc64-unknown-linux-gnu
+          - name: macos-latest
+            target:
+              - x86_64-apple-darwin
+              - aarch64-apple-darwin
+          - name: windows-latest
+            target:
         cfg:
           - all_tests
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os.name }}
     steps:
       - uses: actions/checkout@v3
       - name: Cache cargo build and registry
@@ -244,28 +248,27 @@ jobs:
         run: cargo install cargo-hack
       - name: Miri (Linux)
         run: |
-          bash ci/miri_tb.sh ${{ matrix.target }} ${{ matrix.cfg }}
-        if: matrix.os == 'ubuntu-latest'
-      - name: Miri (macOS)
-        run: |
-          bash ci/miri_tb_generic.sh ${{ matrix.cfg }}
-        if: matrix.os == 'macos-latest'
+          bash ci/miri_tb.sh ${{ matrix.os.target }} ${{ matrix.cfg }}
 
   miri-sb:
-    name: miri-sb
+    name: miri-sb-${{ matrix.os.target }}-${{ matrix.cfg }}
     strategy:
       matrix:
         os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-        target:
-          - x86_64-unknown-linux-gnu
-          - i686-unknown-linux-gnu
-          - powerpc64-unknown-linux-gnu
+          - name: ubuntu-latest
+            target:
+              - x86_64-unknown-linux-gnu
+              - i686-unknown-linux-gnu
+              - powerpc64-unknown-linux-gnu
+          - name: macos-latest
+            target:
+              - x86_64-apple-darwin
+              - aarch64-apple-darwin
+          - name: windows-latest
+            target:
         cfg:
           - all_tests
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os.name }}
     steps:
       - uses: actions/checkout@v3
       - name: Cache cargo build and registry
@@ -282,12 +285,7 @@ jobs:
         run: cargo install cargo-hack
       - name: Miri (Linux)
         run: |
-          bash ci/miri_sb.sh ${{ matrix.target }} ${{ matrix.cfg }}
-        if: matrix.os == 'ubuntu-latest'
-      - name: Miri (macOS)
-        run: |
-          bash ci/miri_sb_generic.sh ${{ matrix.cfg }}
-        if: matrix.os == 'macos-latest'
+          bash ci/miri_sb.sh ${{ matrix.os.target }} ${{ matrix.cfg }}
 
   loom:
     name: loom
@@ -385,6 +383,8 @@ jobs:
           key: ${{ runner.os }}-coverage-cargo-build-target
       - name: Run tarpaulin
         uses: actions-rs/cargo@v1
+        env:
+          RUSTFLAGS: "--cfg all_tests"
         with:
           command: tarpaulin
           args: --all-features --run-types tests --run-types doctests --workspace --out xml

@@ -191,8 +191,6 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          # - macos-latest
-          # - windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -214,10 +212,6 @@ jobs:
         run: cargo install cargo-hack
       - name: ASAN / LSAN / TSAN (Linux)
         run: ci/sanitizer.sh
-        if: matrix.os == 'ubuntu-latest'
-      - name: ASAN / LSAN / TSAN
-        run: ci/sanitizer_generic.sh
-        if: matrix.os != 'ubuntu-latest'
 
   miri-tb:
     name: miri-tb
@@ -227,6 +221,12 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
+        target:
+          - x86_64-unknown-linux-gnu
+          - i686-unknown-linux-gnu
+          - powerpc64-unknown-linux-gnu
+        cfg:
+          - all_tests
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -243,11 +243,13 @@ jobs:
       - name: Install cargo-hack
         run: cargo install cargo-hack
       - name: Miri (Linux)
-        run: ci/miri_tb.sh
+        run: |
+          bash ci/miri_tb.sh ${{ matrix.target }} ${{ matrix.cfg }}
         if: matrix.os == 'ubuntu-latest'
-      - name: Miri
-        run: ci/miri_tb_generic.sh
-        if: matrix.os != 'ubuntu-latest'
+      - name: Miri (macOS)
+        run: |
+          bash ci/miri_tb_generic.sh ${{ matrix.cfg }}
+        if: matrix.os == 'macos-latest'
 
   miri-sb:
     name: miri-sb
@@ -257,6 +259,12 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
+        target:
+          - x86_64-unknown-linux-gnu
+          - i686-unknown-linux-gnu
+          - powerpc64-unknown-linux-gnu
+        cfg:
+          - all_tests
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -273,11 +281,13 @@ jobs:
       - name: Install cargo-hack
         run: cargo install cargo-hack
       - name: Miri (Linux)
-        run: ci/miri_sb.sh
+        run: |
+          bash ci/miri_sb.sh ${{ matrix.target }} ${{ matrix.cfg }}
         if: matrix.os == 'ubuntu-latest'
-      - name: Miri
-        run: ci/miri_sb_generic.sh
-        if: matrix.os != 'ubuntu-latest'
+      - name: Miri (macOS)
+        run: |
+          bash ci/miri_sb_generic.sh ${{ matrix.cfg }}
+        if: matrix.os == 'macos-latest'
 
   loom:
     name: loom

@@ -39,7 +39,7 @@ jobs:
       
       - name: Count total lines of code
         run: |
-          tokeit
+          tokeit --lang rust
       - name: Upload total loc to GitHub Gist
         uses: actions/github-script@v8
         with:

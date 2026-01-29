@@ -93,7 +93,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Cache cargo build and registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -121,7 +121,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Cache cargo build and registry
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/registry
@@ -136,7 +136,7 @@ jobs:
     - name: Install cargo-hack
       run: cargo install cargo-hack
     - name: Cache ~/.cargo
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ~/.cargo
         key: ${{ runner.os }}-coverage-dotcargo
@@ -155,7 +155,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Cache cargo build and registry
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/registry
@@ -170,7 +170,7 @@ jobs:
     - name: Install cargo-hack
       run: cargo install cargo-hack
     - name: Cache ~/.cargo
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ~/.cargo
         key: ${{ runner.os }}-coverage-dotcargo
@@ -187,7 +187,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Cache cargo build and registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -236,7 +236,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Cache cargo build and registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -282,7 +282,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Cache cargo build and registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -309,7 +309,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Cache cargo build and registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -330,7 +330,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Cache cargo build and registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -382,12 +382,12 @@ jobs:
           crate: cargo-tarpaulin
           version: latest
       - name: Cache ~/.cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo
           key: ${{ runner.os }}-coverage-dotcargo
       - name: Cache cargo build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: target
           key: ${{ runner.os }}-coverage-cargo-build-target

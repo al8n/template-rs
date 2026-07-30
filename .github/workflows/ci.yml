@@ -21,6 +21,10 @@ on:
   schedule: 
     - cron: "0 1 1 * *"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings

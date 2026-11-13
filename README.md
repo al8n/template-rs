@@ -47,7 +47,8 @@ A crate skeleton, and the CI/CD that the author's crates run, ready to be rename
 - **The release.** A tag `vX.Y.Z` publishes through crates.io trusted publishing, with no token
   stored anywhere, after checking that the commit is on `main` and green.
 - **Configuration.** `rustfmt.toml`; `.codecov.yml`, informational only, so coverage never blocks a
-  merge; `.github/dependabot.yml`; and a `CHANGELOG.md` whose structure `ci/changelog.sh` checks.
+  merge; `deny.toml`, the cargo-deny policy; `.github/dependabot.yml`; and a `CHANGELOG.md` whose
+  structure `ci/changelog.sh` checks.
 
 | Workflow | What it runs | Pause it |
 | --- | --- | --- |
@@ -56,6 +57,7 @@ A crate skeleton, and the CI/CD that the author's crates run, ready to be rename
 | `miri-tb.yml`, `miri-sb.yml` | Miri under Tree Borrows and under Stacked Borrows, on six Linux targets | Yes: Miri is slow |
 | `perf.yml` | The criterion bench, run once as a smoke check | Yes |
 | `coverage.yml` | cargo-llvm-cov, uploaded to codecov | Yes |
+| `deny.yml` | cargo-deny against `deny.toml`: advisories, bans, licenses and sources, weekly as well | Yes: it is never required, and the release does not ask for it |
 | `release.yml` | The release, described below | No |
 | `loc.yml` | The lines-of-code badge, written to a gist | Yes |
 
@@ -78,11 +80,13 @@ A crate skeleton, and the CI/CD that the author's crates run, ready to be rename
      with it.
    - `REQUIRED_WORKFLOWS` in `release.yml`: the workflows that must be green on the commit a
      release tags. Add `macos.yml` and `windows.yml` to require them too.
+   - `allow` in `deny.toml`: the licenses the crate's dependencies may have. It lists the template's
+     own and the one criterion's tree needs; add what your dependencies need.
    - Delete what the crate has no use for, together with its row in the table above. With no
      benches that is `perf.yml`, `benches/`, the `[[bench]]` entry and the `criterion`
      dev-dependency. With no wish for Miri it is `miri-tb.yml`, `miri-sb.yml` and `ci/miri_*.sh`,
      and their names in `REQUIRED_WORKFLOWS`. Without codecov it is `coverage.yml`, `.codecov.yml`
-     and the badge.
+     and the badge. Without cargo-deny it is `deny.yml` and `deny.toml`.
 4. **Add the secrets**, both optional. `CODECOV_TOKEN` lets `coverage.yml` upload; without it the
    report is still measured and the job says that it was discarded. `loc.yml` needs a gist: create
    one, put its id in the workflow, and add a personal access token with the gist scope as the

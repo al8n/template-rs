@@ -11,7 +11,7 @@ rust-version = "1.85"
 readme = "README.md"
 keywords = ["template"]
 categories = ["no-std", "no-std::no-alloc"]
-exclude = ["/.github/", "/ci/", "/.codecov.yml"]
+exclude = ["/.github/", "/ci/", "/.codecov.yml", "/deny.toml"]
 
 # The tiers. With no feature the crate is `no_std` and allocates nothing; `alloc` adds the heap
 # types and `std` the standard library, and the two are independent: `std` does not imply `alloc`.

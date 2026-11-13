@@ -8,10 +8,12 @@ name: macOS
 # belongs to the WHOLE run, so one queued macOS job keeps every other verdict in `ci.yml` from being
 # readable. Here the wait stays confined, and a macOS-only failure reads on its own.
 #
-# It can be paused alone (Actions > macOS > ... > Disable workflow) while you work, and should be
-# turned back on before a release. This is a scheduling split and not a coverage decision: every
-# step is what `ci.yml` runs, and the single-entry `os` matrix keeps the check names `clippy
-# (macos-latest)`, `build (macos-latest)` and `test (macos-latest)`.
+# It can be paused alone (Actions > macOS > ... > Disable workflow) while you work. The release
+# asks for it: `release.yml` requires it to be green on the commit it releases, and a paused
+# workflow has no run for that commit, so turn it back on, and run it on `main`, before tagging.
+# This is a scheduling split and not a coverage decision: every step is what `ci.yml` runs, and the
+# single-entry `os` matrix keeps the check names `clippy (macos-latest)`, `build (macos-latest)` and
+# `test (macos-latest)`.
 #
 # `rustfmt` is not here: it is decided by the rustfmt version and `rustfmt.toml`, not by the host.
 # There is no `schedule` either: a weekly run of unchanged code would spend this lane's queue

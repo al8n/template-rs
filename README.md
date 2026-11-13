@@ -53,8 +53,8 @@ A crate skeleton, and the CI/CD that the author's crates run, ready to be rename
 | Workflow | What it runs | Pause it |
 | --- | --- | --- |
 | `ci.yml` | The merge gate, Linux only: rustfmt; clippy for each feature; build and test for every feature combination; a bare-metal `no_std` build; the MSRV; docs with `-D warnings` and the docs.rs configuration; cross builds for 15 targets; the address sanitizer; `cargo publish --dry-run`; the changelog structure | No |
-| `macos.yml`, `windows.yml` | clippy, build and test on those hosts | Yes: their runners queue for hours |
-| `miri-tb.yml`, `miri-sb.yml` | Miri under Tree Borrows and under Stacked Borrows, on six Linux targets | Yes: Miri is slow |
+| `macos.yml`, `windows.yml` | clippy, build and test on those hosts | Yes: their runners queue for hours. The release asks for them |
+| `miri-tb.yml`, `miri-sb.yml` | Miri under Tree Borrows and under Stacked Borrows, on six Linux targets | Yes: Miri is slow. The release asks for them |
 | `perf.yml` | The criterion bench, run once as a smoke check | Yes |
 | `coverage.yml` | cargo-llvm-cov, uploaded to codecov | Yes |
 | `deny.yml` | cargo-deny against `deny.toml`: advisories, bans, licenses and sources, weekly as well | Yes: it is never required, and the release does not ask for it |
@@ -79,7 +79,8 @@ A crate skeleton, and the CI/CD that the author's crates run, ready to be rename
      `rust-version` 1.85 or later. The `msrv` job reads `rust-version`, so nothing else moves
      with it.
    - `REQUIRED_WORKFLOWS` in `release.yml`: the workflows that must be green on the commit a
-     release tags. Add `macos.yml` and `windows.yml` to require them too.
+     release tags, which are `ci.yml`, both Miri workflows, `macos.yml` and `windows.yml`. Drop the
+     name of a lane the crate does not have.
    - `allow` in `deny.toml`: the licenses the crate's dependencies may have. It lists the template's
      own and the one criterion's tree needs; add what your dependencies need.
    - Delete what the crate has no use for, together with its row in the table above. With no
@@ -108,13 +109,14 @@ A crate skeleton, and the CI/CD that the author's crates run, ready to be rename
    changes when you do it:
 
    ```sh
-   gh workflow disable macos.yml   # pause
-   gh workflow enable macos.yml    # turn it back on
+   gh workflow disable macos.yml          # pause
+   gh workflow enable macos.yml           # turn it back on
+   gh workflow run macos.yml --ref main   # run it on main, if main moved while it was off
    ```
 
    Turn every lane back on before a release, and let it run on `main`: `release.yml` requires
-   `ci.yml` and both Miri workflows to be green on the commit it releases, and a paused workflow has
-   no run for that commit.
+   `ci.yml`, both Miri workflows, `macos.yml` and `windows.yml` to be green on the commit it
+   releases, and a paused workflow has no run for that commit.
 7. **Release.** Set `version` in `Cargo.toml`, rename the `Unreleased` section of `CHANGELOG.md` to
    `## X.Y.Z (YYYY-MM-DD)` and open a new one above it, and merge to `main`. Then:
 
@@ -125,7 +127,9 @@ A crate skeleton, and the CI/CD that the author's crates run, ready to be rename
    ```
 
    `release.yml` checks the commit, the version against the tag, the changelog and the workflows,
-   publishes, and creates the GitHub Release from the changelog section.
+   publishes, and creates the GitHub Release from the changelog section. Run the optional first
+   command after a lane was paused: it fails naming the required workflow that has no green run on
+   the commit.
 
 #### License
 

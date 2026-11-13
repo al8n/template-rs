@@ -1,0 +1,81 @@
+name: Miri (Tree Borrows)
+
+# ── THE SLOW LANE, ONE ALIASING MODEL ───────────────────────────────────────────────────────
+#
+# Miri sets its own wall clock: it interprets the tests, so a suite that takes seconds natively
+# takes minutes under it, once per target. It lives in a workflow of its own so that `ci.yml` can
+# conclude in tens of minutes, and in one workflow per aliasing model (this one and `miri-sb.yml`)
+# because a Tree Borrows report and a Stacked Borrows report are different findings: code can be
+# clean under one model and not the other, so each is paused, and read, on its own.
+#
+# Pause it (Actions > Miri (Tree Borrows) > ... > Disable workflow) while you work, and turn it back
+# on before a release: `release.yml` requires both Miri workflows to be green on the commit it
+# releases. There is no `schedule`: re-interpreting unchanged code re-proves what the push did.
+#
+# Every cell runs on `ubuntu-latest`. Miri interprets a TARGET, and the host only has to build for
+# it. No apple target is in the matrix, and that is deliberate: criterion depends on `alloca`,
+# whose build script compiles C, and a Linux host cannot do that for an apple target. A crate that
+# moves its benches into a workspace member, so that criterion is out of `cargo miri test`'s graph,
+# can add `x86_64-apple-darwin` and `aarch64-apple-darwin` as rows; one that keeps criterion in the
+# root package can run `aarch64-apple-darwin` on `macos-latest`, at the price of a macOS queue here.
+#
+# `-Dwarnings` is not set, unlike `ci.yml`: this lane runs on nightly, whose lint set moves under
+# an unchanged crate, and what it reports is undefined behaviour and not lints.
+
+# Triggers, `paths-ignore` and the concurrency group are `ci.yml`'s; its comments say why.
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'COPYRIGHT'
+      - 'LICENSE-*'
+      - '**.txt'
+  pull_request:
+    paths-ignore:
+      - 'COPYRIGHT'
+      - 'LICENSE-*'
+      - '**.txt'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # `fail-fast: false`: each target is its own question, and the first red cell must not cancel the
+  # others and leave a report that says nothing about them.
+  miri:
+    name: miri-tb-${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - i686-unknown-linux-gnu
+          - powerpc64-unknown-linux-gnu
+          - s390x-unknown-linux-gnu
+          - riscv64gc-unknown-linux-gnu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-miri-${{ matrix.target }}-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-miri-${{ matrix.target }}-
+      - name: Miri
+        run: bash ci/miri_tb.sh "${{ matrix.target }}"

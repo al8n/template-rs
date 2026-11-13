@@ -1,0 +1,102 @@
+name: coverage
+
+# ── THE COVERAGE LANE ───────────────────────────────────────────────────────────────────────
+#
+# cargo-llvm-cov on nightly, uploaded to codecov. It reports and never gates: it is not a required
+# check, a failure here must not hold a merge, and the codecov statuses are informational
+# (`.codecov.yml`). It is a workflow of its own because it is a full instrumented build on nightly,
+# slower than anything in `ci.yml`, and a nightly that breaks the tool should not redden the gate.
+#
+# Pause it (Actions > coverage > ... > Disable workflow) while you work. A repository that does not
+# want codecov deletes this workflow, `.codecov.yml` and the README badge.
+#
+# The upload needs the `CODECOV_TOKEN` secret. Without it the report is still measured and the job
+# says so in a warning instead of failing: a new crate has no token yet, and a pull request from a
+# fork never has one.
+#
+# `-Dwarnings` is not set, unlike `ci.yml`: this lane runs on nightly, whose lint set moves under
+# an unchanged crate.
+
+# Triggers, `paths-ignore` and the concurrency group are `ci.yml`'s; its comments say why. There is
+# no `schedule`: coverage of unchanged code is unchanged.
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'COPYRIGHT'
+      - 'LICENSE-*'
+      - '**.txt'
+  pull_request:
+    paths-ignore:
+      - 'COPYRIGHT'
+      - 'LICENSE-*'
+      - '**.txt'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    env:
+      # `secrets` is not available in a step's `if:`, so the token is mirrored into `env` first.
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust (nightly, with llvm-tools-preview)
+        # `llvm-tools-preview` is what cargo-llvm-cov reads `llvm-profdata` and `llvm-cov` from.
+        # Nightly because doctest coverage (`--doctests` below) needs nightly-only rustdoc
+        # instrumentation.
+        run: |
+          rustup update nightly --no-self-update
+          rustup default nightly
+          rustup component add llvm-tools-preview
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-coverage-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-coverage-
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      # No `--tests` next to `--doctests`: cargo-llvm-cov refuses the pair. `--doctests` alone runs
+      # the default set (unit tests and `tests/`) as well as the doctests.
+      - name: cargo llvm-cov --all-features --doctests
+        run: cargo llvm-cov --all-features --doctests --lcov --output-path lcov.info
+      - name: A report was actually written
+        run: |
+          if [ ! -s lcov.info ]; then
+            echo "::error::cargo-llvm-cov exited 0 but wrote no lcov.info, so this job measured nothing"
+            exit 1
+          fi
+          echo "ok: lcov.info is $(wc -c < lcov.info) bytes"
+      - name: Upload to codecov.io
+        if: env.CODECOV_TOKEN != ''
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: ${{ github.repository }}
+          files: lcov.info
+          fail_ci_if_error: true
+      - name: Say so when the upload could not happen
+        if: env.CODECOV_TOKEN == ''
+        run: |
+          echo "::warning::CODECOV_TOKEN is not set, so the report above was measured and then discarded."
+          echo "::warning::Add it under Settings > Secrets and variables > Actions to publish coverage."

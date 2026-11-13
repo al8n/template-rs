@@ -4,14 +4,19 @@ name: CI
 #
 # Every job here runs on `ubuntu-latest`, and that is the contract: this workflow's conclusion is
 # the one a merge waits for, and it is answerable in tens of minutes. A run's conclusion belongs to
-# the WHOLE run, so one job that queues for hours on a macOS or Windows runner leaves every other
-# verdict in the run unreadable. Those legs are workflows of their own:
+# the WHOLE run, so one job that queues for hours on a macOS or Windows runner, or runs for hours
+# under Miri, leaves every other verdict in the run unreadable. Those lanes are workflows of their
+# own:
 #
 #   macos.yml, windows.yml    the `macos-latest` and `windows-latest` legs of clippy, build and test
+#   miri-tb.yml, miri-sb.yml  Miri under Tree Borrows and under Stacked Borrows
+#   perf.yml                  the criterion benches, run once as a smoke check
+#   coverage.yml              cargo-llvm-cov, uploaded to codecov; never a required check
 #
 # Each can be paused alone (Actions > the workflow > ... > Disable workflow) while you work, and
-# turned back on before a release. Adding a `runs-on:` other than `ubuntu-latest` to this file gives
-# the contract up. No job has a `needs:`, so no failure delays another job's verdict.
+# turned back on before a release. Adding a `runs-on:` other than `ubuntu-latest` to this file, or
+# a Miri, perf or coverage job, gives the contract up. No job has a `needs:`, so no failure delays
+# another job's verdict.
 
 on:
   push:

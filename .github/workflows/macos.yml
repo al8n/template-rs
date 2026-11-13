@@ -1,0 +1,138 @@
+name: macOS
+
+# ── THE QUEUE-BOUND LANE ────────────────────────────────────────────────────────────────────
+#
+# These legs are the `macos-latest` row of the `clippy`, `build` and `test` jobs of `ci.yml`, in a
+# workflow of their own. macOS runner concurrency is an account-wide limit shared with every other
+# repository: a job that is fast once it starts can wait hours for a runner, and a run's conclusion
+# belongs to the WHOLE run, so one queued macOS job keeps every other verdict in `ci.yml` from being
+# readable. Here the wait stays confined, and a macOS-only failure reads on its own.
+#
+# It can be paused alone (Actions > macOS > ... > Disable workflow) while you work, and should be
+# turned back on before a release. This is a scheduling split and not a coverage decision: every
+# step is what `ci.yml` runs, and the single-entry `os` matrix keeps the check names `clippy
+# (macos-latest)`, `build (macos-latest)` and `test (macos-latest)`.
+#
+# `rustfmt` is not here: it is decided by the rustfmt version and `rustfmt.toml`, not by the host.
+# There is no `schedule` either: a weekly run of unchanged code would spend this lane's queue
+# re-proving what the push that produced the code already proved.
+
+# Triggers, `paths-ignore` and the concurrency group are `ci.yml`'s; its comments say why.
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'COPYRIGHT'
+      - 'LICENSE-*'
+      - '**.txt'
+  pull_request:
+    paths-ignore:
+      - 'COPYRIGHT'
+      - 'LICENSE-*'
+      - '**.txt'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings -C debuginfo=0 -C codegen-units=16
+  RUST_BACKTRACE: 1
+
+jobs:
+  clippy:
+    name: clippy
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-clippy-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-clippy-
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable && rustup component add clippy
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      # The same two commands as `ci.yml`'s `clippy`, repeated because the files cannot share
+      # them. A lint gate that holds in one copy and not the others is the drift a split invites.
+      - name: cargo hack clippy --each-feature --tests
+        run: cargo hack clippy --each-feature --tests --keep-going -- -D warnings
+      - name: cargo clippy --all-features --all-targets
+        run: cargo clippy --all-features --all-targets -- -D warnings
+
+  build:
+    name: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-build-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - name: cargo hack build --feature-powerset
+        run: cargo hack build --feature-powerset --keep-going
+
+  test:
+    name: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - name: cargo hack test --feature-powerset
+        run: cargo hack test --feature-powerset --keep-going

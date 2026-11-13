@@ -1,71 +1,307 @@
 name: CI
 
+# ── THE MERGE GATE ──────────────────────────────────────────────────────────────────────────
+#
+# Every job here runs on `ubuntu-latest`, and that is the contract: this workflow's conclusion is
+# the one a merge waits for, and it is answerable in tens of minutes. A run's conclusion belongs to
+# the WHOLE run, so one job that queues for hours on a macOS or Windows runner leaves every other
+# verdict in the run unreadable. Those legs are workflows of their own:
+#
+#   macos.yml, windows.yml    the `macos-latest` and `windows-latest` legs of clippy, build and test
+#
+# Each can be paused alone (Actions > the workflow > ... > Disable workflow) while you work, and
+# turned back on before a release. Adding a `runs-on:` other than `ubuntu-latest` to this file gives
+# the contract up. No job has a `needs:`, so no failure delays another job's verdict.
+
 on:
   push:
     branches:
       - main
+    # No blanket `**.md`: a README that the crate pulls into its rustdoc with `include_str!` is
+    # code, and CHANGELOG.md is checked by the `changelog` job below.
     paths-ignore:
-      - 'README'
       - 'COPYRIGHT'
       - 'LICENSE-*'
-      - '**.md'
       - '**.txt'
   pull_request:
     paths-ignore:
-      - 'README'
       - 'COPYRIGHT'
       - 'LICENSE-*'
-      - '**.md'
       - '**.txt'
   workflow_dispatch:
-  schedule: 
-    - cron: "0 1 1 * *"
+  # A weekly run of unchanged code is where a new nightly, a new clippy lint or a yanked dependency
+  # shows up between merges. A `schedule` runs only the default branch's copy of the workflow.
+  schedule: [cron: "0 1 */7 * *"]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # One run per workflow per ref, so a branch's CI reflects its tip and not a queue of superseded
+  # commits. On `main` the group is keyed on the commit as well and nothing is cancelled: a run
+  # queued behind another in the same group cancels the pending one whatever `cancel-in-progress`
+  # says, and every commit on `main` should get its own verdict.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -Dwarnings
+  RUSTFLAGS: -Dwarnings -C debuginfo=0 -C codegen-units=16
   RUST_BACKTRACE: 1
 
 jobs:
-  # Check formatting (platform-independent, one OS is enough)
   rustfmt:
     name: rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
-    - name: Install Rust
-      run: rustup update stable && rustup default stable && rustup component add rustfmt
-    - name: Check formatting
-      run: cargo fmt --all -- --check
+      - uses: actions/checkout@v7
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable && rustup component add rustfmt
+      - name: cargo +stable fmt --all -- --check
+        run: cargo +stable fmt --all -- --check
 
-  # Apply clippy lints
+  # Every feature alone, plus none and all. With today's tiers that is `no features`, `alloc`, `std`
+  # and `std + alloc`. `--tests` lints test code as well; examples and benches have no feature
+  # matrix of their own and are linted once, with everything on, by the second step.
+  #
+  # The single-entry `os` matrix keeps the check named `clippy (ubuntu-latest)`, as it was while
+  # the macOS and Windows legs were rows of it. The same goes for `build` and `test`.
   clippy:
     name: clippy
     strategy:
       matrix:
         os:
           - ubuntu-latest
-          - macos-latest
-          - windows-latest
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v7
-    - name: Install Rust
-      # --no-self-update is necessary because the windows environment cannot self-update rustup.exe.
-      run: rustup update stable --no-self-update && rustup default stable && rustup component add clippy
-    - name: Install cargo-hack
-      run: cargo install cargo-hack
-    - name: Apply clippy lints
-      run: cargo hack clippy --each-feature --exclude-no-default-features
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-clippy-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-clippy-
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable && rustup component add clippy
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      # Kept the same in macos.yml and windows.yml. `--keep-going` reports every failing feature
+      # combination in one run instead of stopping at the first.
+      - name: cargo hack clippy --each-feature --tests
+        run: cargo hack clippy --each-feature --tests --keep-going -- -D warnings
+      - name: cargo clippy --all-features --all-targets
+        run: cargo clippy --all-features --all-targets -- -D warnings
 
-  # Run tests on some extra platforms
+  # The library as a consumer builds it: no dev-dependencies, so no feature one of them would
+  # switch on. `--feature-powerset` builds every combination of the crate's features, the empty one
+  # included. With today's tiers that is `no features`, `alloc`, `std` and `std + alloc`, the four
+  # builds the house tier rules ask for. A crate with many features makes the powerset large:
+  # change it to `--each-feature`, or bound it with `--depth 2`.
+  build:
+    name: build
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-build-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - name: cargo hack build --feature-powerset
+        run: cargo hack build --feature-powerset --keep-going
+
+  test:
+    name: test
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - name: cargo hack test --feature-powerset
+        run: cargo hack test --feature-powerset --keep-going
+      # The profile users ship. `debug_assertions` and overflow checks are what separate the two
+      # profiles, and a suite that only runs in debug cannot see a divergence between them.
+      - name: cargo test --release --all-features
+        run: cargo test --release --all-features
+
+  # A host build cannot show that a crate is `no_std`: `std` is linkable on the host whether or
+  # not the crate reaches for it. These targets have no `std`, so a crate that links it does not
+  # build. Two cores, because they differ where it matters: `thumbv6m-none-eabi` has no atomic
+  # compare-and-swap, so an `Arc` fails there, and `thumbv7em-none-eabihf` has it. The core tier
+  # and the `alloc` tier are built; the `std` tier has no bare-metal build to make.
+  no-std:
+    name: no-std
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - thumbv6m-none-eabi
+          - thumbv7em-none-eabihf
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-nostd-${{ matrix.target }}-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-nostd-${{ matrix.target }}-
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: rustup target add ${{ matrix.target }}
+        run: rustup target add ${{ matrix.target }}
+      - name: cargo build --target ${{ matrix.target }} --no-default-features
+        run: cargo build --target ${{ matrix.target }} --no-default-features
+      - name: cargo build --target ${{ matrix.target }} --no-default-features --features alloc
+        run: cargo build --target ${{ matrix.target }} --no-default-features --features alloc
+
+  # Every other job runs `rustup update stable`, so without this one the declared MSRV is never
+  # exercised and drifts upward unnoticed. The toolchain is READ from Cargo.toml: to move the
+  # floor, edit `rust-version` and nothing else.
+  msrv:
+    name: msrv
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read declared MSRV from Cargo.toml
+        id: msrv
+        run: |
+          version=$( { grep -m1 '^rust-version' Cargo.toml || true; } | sed -E 's/^rust-version *= *"([^"]+)".*/\1/')
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::could not read a rust-version such as \"1.73\" from Cargo.toml (got '$version')"
+            exit 1
+          fi
+          echo "Declared MSRV: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "MSRV=$version" >> "$GITHUB_ENV"
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-msrv-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-msrv-
+      # The lockfile is not committed, and an old cargo resolves every dependency, dev-dependencies
+      # included, to the newest release, whatever compiler that release needs. The current cargo
+      # with the MSRV-aware resolver picks releases the floor can build.
+      - name: Resolve dependencies for the declared MSRV
+        env:
+          CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: fallback
+        run: |
+          rustup update stable --no-self-update
+          cargo +stable generate-lockfile
+      - name: Install Rust ${{ steps.msrv.outputs.version }}
+        run: rustup toolchain install "$MSRV" --profile minimal --no-self-update
+      # Exit 0 from the checks below is not proof that the floor was exercised if the toolchain
+      # silently resolved to something else.
+      - name: The toolchain really is ${{ steps.msrv.outputs.version }}
+        run: |
+          got=$(rustc "+$MSRV" --version)
+          echo "$got"
+          case "$got" in
+            "rustc $MSRV."* | "rustc $MSRV "*) ;;
+            *)
+              echo "::error::asked rustup for $MSRV and got '$got'; this job is not testing the declared floor"
+              exit 1
+              ;;
+          esac
+      # `--lib` because the floor is a promise to consumers, who never build dev-dependencies. The
+      # last line covers every feature a crate adds later.
+      - name: cargo +${{ steps.msrv.outputs.version }} check --lib, each tier
+        run: |
+          cargo "+$MSRV" check --lib --no-default-features
+          cargo "+$MSRV" check --lib --no-default-features --features alloc
+          cargo "+$MSRV" check --lib --no-default-features --features std
+          cargo "+$MSRV" check --lib --all-features
+
+  doc:
+    name: doc
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-doc-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-doc-
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: cargo doc --all-features --no-deps
+        run: cargo doc --all-features --no-deps
+      # The only leg that sees a broken link into a feature-gated item from an ungated one:
+      # `--all-features` documents every item, so such a link always resolves there.
+      - name: cargo doc --no-default-features --no-deps
+        run: cargo doc --no-default-features --no-deps
+      # The configuration docs.rs builds with. `#[cfg_attr(docsrs, doc(cfg(...)))]` is inert
+      # without `--cfg docsrs`, so the two steps above cannot tell a correct attribute from a
+      # misapplied one, and a fault only this leg sees is a published-docs failure found after the
+      # release. Nightly, because `doc(cfg)` is a nightly feature, as it is on docs.rs.
+      - name: Install Rust (nightly, for the docs.rs configuration)
+        run: rustup toolchain install nightly --profile minimal --no-self-update
+      - name: cargo +nightly doc --all-features --no-deps, with --cfg docsrs
+        env:
+          RUSTDOCFLAGS: --cfg docsrs -D warnings
+        run: cargo +nightly doc --all-features --no-deps
+
+  # A matrix of independent questions, so `fail-fast: false`: one target that cannot build must
+  # not cancel the other fourteen and turn them into `fail` in `gh pr checks`.
   cross:
     name: cross
     strategy:
+      fail-fast: false
       matrix:
         target:
           - aarch64-unknown-linux-gnu
@@ -93,76 +329,24 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cross-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cross-${{ matrix.target }}-${{ hashFiles('**/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-cross-
+            ${{ runner.os }}-cross-${{ matrix.target }}-
       - name: Install Rust
-        run: rustup update stable && rustup default stable
-      - name: cargo build --target ${{ matrix.target }}
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: cargo build --all-features --target ${{ matrix.target }}
         run: |
           rustup target add ${{ matrix.target }}
-          cargo build --target ${{ matrix.target }}
+          cargo build --all-features --target ${{ matrix.target }}
 
-  build:
-    name: build
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-    runs-on: ${{ matrix.os }}
-    steps:
-    - uses: actions/checkout@v7
-    - name: Cache cargo build and registry
-      uses: actions/cache@v6
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-build-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-build-
-    - name: Install Rust
-      # --no-self-update is necessary because the windows environment cannot self-update rustup.exe.
-      run: rustup update stable --no-self-update && rustup default stable
-    - name: Install cargo-hack
-      run: cargo install cargo-hack
-    - name: Run build
-      run: cargo hack build --feature-powerset --exclude-no-default-features
-
-  test:
-    name: test
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-    runs-on: ${{ matrix.os }}
-    steps:
-    - uses: actions/checkout@v7
-    - name: Cache cargo build and registry
-      uses: actions/cache@v6
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-test-
-    - name: Install Rust
-      # --no-self-update is necessary because the windows environment cannot self-update rustup.exe.
-      run: rustup update stable --no-self-update && rustup default stable
-    - name: Install cargo-hack
-      run: cargo install cargo-hack
-    - name: Run test
-      run: cargo hack test --feature-powerset --exclude-no-default-features --exclude-features loom
-
+  # Nightly, and only here. `address` is the one sanitizer in the matrix; `ci/sanitizer.sh` says
+  # why the other three are not, and how to add them.
   sanitizer:
     name: sanitizer
+    strategy:
+      fail-fast: false
+      matrix:
+        san: [address]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -173,160 +357,25 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-sanitizer-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-san-${{ matrix.san }}-${{ hashFiles('**/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-sanitizer-
-      - name: Install Rust
-        run: rustup update nightly && rustup default nightly
-      - name: Install rust-src
-        run: rustup component add rust-src
-      - name: ASAN / LSAN / MSAN / TSAN
-        run: bash ci/sanitizer.sh
-
-  miri-tb:
-    name: miri-tb-${{ matrix.target }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: i686-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: powerpc64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: s390x-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: riscv64gc-unknown-linux-gnu
-          - os: macos-latest
-            target: aarch64-apple-darwin
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Cache cargo build and registry
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-miri-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-miri-
-      - name: Miri
+            ${{ runner.os }}-san-${{ matrix.san }}-
+      - name: Install Rust (nightly, with rust-src for -Zbuild-std)
         run: |
-          bash ci/miri_tb.sh "${{ matrix.target }}"
+          rustup toolchain install nightly --profile minimal --no-self-update --component rust-src
+          rustup default nightly
+      - name: ci/sanitizer.sh
+        run: bash ci/sanitizer.sh x86_64-unknown-linux-gnu ${{ matrix.san }}
 
-  miri-sb:
-    name: miri-sb-${{ matrix.target }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: i686-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: powerpc64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: s390x-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: riscv64gc-unknown-linux-gnu
-          - os: macos-latest
-            target: aarch64-apple-darwin
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Cache cargo build and registry
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-miri-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-miri-
-      - name: Miri
-        run: |
-          bash ci/miri_sb.sh "${{ matrix.target }}"
-
-  loom:
-    name: loom
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Cache cargo build and registry
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-loom-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-loom-
-      - name: Install Rust
-        run: rustup update nightly --no-self-update && rustup default nightly
-      - name: Loom tests
-        run: cargo test --tests --features loom
-
-  # valgrind:
-  #   name: valgrind
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v7
-  #     - name: Cache cargo build and registry
-  #       uses: actions/cache@v6
-  #       with:
-  #         path: |
-  #           ~/.cargo/registry
-  #           ~/.cargo/git
-  #           target
-  #         key: ubuntu-latest-valgrind-${{ hashFiles('**/Cargo.lock') }}
-  #         restore-keys: |
-  #           ubuntu-latest-valgrind-
-  #     - name: Install Rust
-  #       run: rustup update stable && rustup default stable
-  #     - name: Install Valgrind
-  #       run: |
-  #         sudo apt-get update -y
-  #         sudo apt-get install -y valgrind
-  #     # Uncomment and customize when you have binaries to test:
-  #     # - name: cargo build foo
-  #     #   run: cargo build --bin foo
-  #     #   working-directory: integration
-  #     # - name: Run valgrind foo
-  #     #   run: valgrind --error-exitcode=1 --leak-check=full --show-leak-kinds=all ./target/debug/foo
-  #     #   working-directory: integration
-
-  coverage:
-    name: coverage
+  # Worth a job on a small crate, because most of what it checks is metadata, and metadata is what
+  # a repository template leaves behind: `cargo publish` refuses a package with no description, no
+  # license or no repository, and a package whose declared files are not in the tarball. The dry
+  # run builds the packaged copy, which is a different tree from the checkout.
+  publish-dry-run:
+    name: publish-dry-run
     runs-on: ubuntu-latest
-    needs:
-      - rustfmt
-      - clippy
-      - build
-      - cross
-      - test
-      - sanitizer
-      - loom
     steps:
       - uses: actions/checkout@v7
-      - name: Install Rust
-        run: rustup update nightly && rustup default nightly
-      - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
       - name: Cache cargo build and registry
         uses: actions/cache@v6
         with:
@@ -334,16 +383,22 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-coverage-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-publish-dry-run-${{ hashFiles('**/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-coverage-
-      - name: Run tarpaulin
-        env:
-          RUSTFLAGS: "--cfg tarpaulin"
-        run: cargo tarpaulin --engine llvm --all-features --run-types lib --run-types tests --run-types doctests --workspace --out xml
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: ${{ github.repository }}
-          fail_ci_if_error: true
+            ${{ runner.os }}-publish-dry-run-
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: cargo publish --dry-run
+        run: cargo publish --dry-run
+
+  # Seconds, no toolchain. The self-test runs first and is not optional: a checker that cannot fail
+  # is not a check, and a green from it means nothing until it has been seen to go red.
+  changelog:
+    name: changelog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: ci/changelog.sh selftest
+        run: bash ci/changelog.sh selftest
+      - name: ci/changelog.sh check
+        run: bash ci/changelog.sh check

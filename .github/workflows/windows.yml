@@ -1,0 +1,150 @@
+name: Windows
+
+# ── THE WINDOWS LANE ────────────────────────────────────────────────────────────────────────
+#
+# These legs are the `windows-latest` row of the `clippy`, `build` and `test` jobs of `ci.yml`, in
+# a workflow of their own so that Windows can be paused and resumed alone, as `macOS` can, while
+# `ci.yml` keeps every Linux job and its verdict. Windows runners queue and run slowly, and a run's
+# conclusion belongs to the WHOLE run: see `macos.yml` for why that decides the split.
+#
+# Pause it (Actions > Windows > ... > Disable workflow) while you work, and turn it back on before
+# a release. It is a scheduling split and not a coverage decision: every step is what `ci.yml`
+# runs, and the single-entry `os` matrix keeps the check names `clippy (windows-latest)`,
+# `build (windows-latest)` and `test (windows-latest)`.
+#
+# `rustfmt` is not here: it is decided by the rustfmt version and `rustfmt.toml`, not by the host.
+
+# Triggers, `paths-ignore` and the concurrency group are `ci.yml`'s; its comments say why. The
+# weekly `schedule` is kept, as in `ci.yml`: this lane is cheap enough to be where a new nightly or
+# a yanked dependency shows up between merges. `macos.yml` has none.
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'COPYRIGHT'
+      - 'LICENSE-*'
+      - '**.txt'
+  pull_request:
+    paths-ignore:
+      - 'COPYRIGHT'
+      - 'LICENSE-*'
+      - '**.txt'
+  workflow_dispatch:
+  schedule: [cron: "0 1 */7 * *"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+# GitHub picks the shell from the HOST when a step does not name one: `bash` on Linux and macOS,
+# `pwsh` on Windows. A `run:` written for bash (a `\` line continuation, `$(...)`) then fails to
+# parse under PowerShell before cargo starts, which is a CI failure and not a Rust one. A file-wide
+# default cannot go stale the way a `shell: bash` on the steps that burned can: the next multi-line
+# `run:` is covered too.
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings -C debuginfo=0 -C codegen-units=16
+  RUST_BACKTRACE: 1
+
+jobs:
+  clippy:
+    name: clippy
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-clippy-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-clippy-
+      - name: Install Rust
+        # --no-self-update is necessary because the Windows runner cannot self-update rustup.exe.
+        run: rustup update stable --no-self-update && rustup default stable && rustup component add clippy
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      # The same two commands as `ci.yml`'s `clippy`, repeated because the files cannot share
+      # them. A lint gate that holds in one copy and not the others is the drift a split invites.
+      - name: cargo hack clippy --each-feature --tests
+        run: cargo hack clippy --each-feature --tests --keep-going -- -D warnings
+      - name: cargo clippy --all-features --all-targets
+        run: cargo clippy --all-features --all-targets -- -D warnings
+
+  build:
+    name: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-build-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+      - name: Install Rust
+        # --no-self-update is necessary because the Windows runner cannot self-update rustup.exe.
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - name: cargo hack build --feature-powerset
+        run: cargo hack build --feature-powerset --keep-going
+
+  test:
+    name: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-
+      - name: Install Rust
+        # --no-self-update is necessary because the Windows runner cannot self-update rustup.exe.
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - name: cargo hack test --feature-powerset
+        run: cargo hack test --feature-powerset --keep-going

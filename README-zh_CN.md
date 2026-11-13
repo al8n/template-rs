@@ -3,7 +3,7 @@
 </div>
 <div align="center">
 
-开源Rust代码库GitHub模版
+创建开源 Rust 代码库的 GitHub 模板
 
 [<img alt="github" src="https://img.shields.io/badge/github-al8n/template--rs-8da0cb?style=for-the-badge&logo=Github" height="22">][Github-url]
 <img alt="LoC" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fgist.githubusercontent.com%2Fal8n%2F327b2a8aef9003246e45c6e47fe63937%2Fraw%2Ftemplate-rs" height="22">
@@ -19,20 +19,83 @@
 
 </div>
 
-## Installation
+## 安装
 
 ```toml
 [dependencies]
-template_rs = "0.1"
+template-rs = "0.1"
 ```
 
-## Features
+## 特性
 
-- [x] 更快的创建GitHub开源Rust代码库
+| 特性 | 默认 | 作用 |
+| --- | --- | --- |
+| `std` | 是 | 标准库 |
+| `alloc` | 否 | 不依赖标准库的堆类型 |
+
+两个特性都不启用时，crate 是 `no_std` 的，并且不分配内存。两者相互独立：`std` 不蕴含 `alloc`，四种组合都是合法的构建。
+
+## 模板提供什么
+
+一个 crate 骨架，以及作者自己的 crate 正在使用的 CI/CD，改个名字即可使用。
+
+- **crate。** `Cargo.toml` 带有上面的特性层级、`[lints]`、docs.rs 元数据和一个 criterion 基准。`src/lib.rs` 是惯用的 crate 根，每一层各有一个条目，使每一层都有东西可构建、可测试；它的单元测试放在单独的文件 `src/tests.rs` 中。`tests/foo.rs`、`examples/foo.rs` 和 `benches/foo.rs` 是占位文件，用来被替换。
+- **合并门禁。** `ci.yml` 只在 Linux 上运行，所以几十分钟内就能得到结论。更慢的任务各自是独立的 workflow，每一个都可以单独暂停。
+- **发布。** 推送标签 `vX.Y.Z` 即通过 crates.io 的 Trusted Publishing 发布，不在任何地方存放 token；发布前会检查该提交在 `main` 上并且 CI 已通过。
+- **配置。** `rustfmt.toml`；`.codecov.yml`（仅供参考，覆盖率永远不会阻止合并）；`.github/dependabot.yml`；以及 `CHANGELOG.md`，其结构由 `ci/changelog.sh` 检查。
+
+| Workflow | 运行内容 | 可否暂停 |
+| --- | --- | --- |
+| `ci.yml` | 合并门禁，仅 Linux：rustfmt；对每个特性运行 clippy；对每种特性组合构建并测试；裸机 `no_std` 构建；MSRV；带 `-D warnings` 和 docs.rs 配置的文档构建；15 个目标的交叉构建；address sanitizer；`cargo publish --dry-run`；changelog 结构检查 | 否 |
+| `macos.yml`、`windows.yml` | 在这两种系统上运行 clippy、构建和测试 | 可以：这两种 runner 要排队数小时 |
+| `miri-tb.yml`、`miri-sb.yml` | 在六个 Linux 目标上分别用 Tree Borrows 和 Stacked Borrows 运行 Miri | 可以：Miri 很慢 |
+| `perf.yml` | 把 criterion 基准只运行一次，作为冒烟检查 | 可以 |
+| `coverage.yml` | cargo-llvm-cov，上传到 codecov | 可以 |
+| `release.yml` | 发布，见下文 | 否 |
+| `loc.yml` | 代码行数徽章，写入 gist | 可以 |
+
+## 用模板创建 crate
+
+1. **创建仓库**：在 GitHub 上点击 "Use this template"，然后克隆。
+2. **改名**。`git grep -n 'template[-_]rs'` 会列出所有出现这个名字的地方：
+   - `Cargo.toml`：`name`、`repository`、`homepage`、`documentation`、`description`、`keywords` 和 `categories`；
+   - `tests/foo.rs`、`examples/foo.rs` 和 `benches/foo.rs` 中，crate 的名字是 `template_rs`；
+   - 本 README 和 `README.md`：标题、徽章和链接；
+   - `.github/workflows/loc.yml`：gist 中的文件名。
+
+   还要修改两个许可证文件以及下方的版权所有者。`release.yml` 会拒绝发布仍然叫 `template-rs` 的包。
+3. **选择保留什么**。下面每一项都只需要改一行：
+   - `Cargo.toml` 中的 `edition` 和 `rust-version`。`msrv` 任务读取 `rust-version`，所以改它不需要动别处。
+   - `release.yml` 中的 `REQUIRED_WORKFLOWS`：发布所打标签的那个提交上必须通过的 workflow。把 `macos.yml` 和 `windows.yml` 加进去，就同样要求它们通过。
+   - 删掉 crate 用不上的东西，连同上表中它的那一行。没有基准测试时，就是 `perf.yml`、`benches/`、`[[bench]]` 条目和 `criterion` 开发依赖。不需要 Miri 时，就是 `miri-tb.yml`、`miri-sb.yml` 和 `ci/miri_*.sh`，以及它们在 `REQUIRED_WORKFLOWS` 中的名字。不使用 codecov 时，就是 `coverage.yml`、`.codecov.yml` 和徽章。
+4. **添加 secret**（都是可选的）。`CODECOV_TOKEN` 让 `coverage.yml` 能够上传；没有它时，报告仍会生成，任务会提示报告已被丢弃。`loc.yml` 需要一个 gist：创建一个，把它的 id 填进 workflow，并把带有 gist 权限的个人访问令牌添加为 secret `GIST_PAT`。
+5. **设置 crates.io（只需一次）**。crates.io 只能为已经存在的 crate 配置 trusted publisher，所以第一个版本要手动发布：
+   - 用 `cargo login` 再 `cargo publish` 发布版本 `0.0.0`。它用来占住名字，而 `release.yml` 特意拒绝发布 `0.0.0`；
+   - 在 crates.io 打开该 crate 的设置，进入 Trusted Publishing，添加一个 GitHub 配置：本仓库、workflow `release.yml`、environment `crates-io`；
+   - GitHub 的 environment `crates-io` 会在首次使用时自动创建。如果希望发布前等待审批，到 `Settings > Environments` 添加必需的审核人。
+
+   在完成这些之前，发布会失败，并给出说明缺少哪一步的信息；它绝不会跳过发布还报告成功。
+6. **工作期间暂停用不到的 workflow**。`macos.yml`、`windows.yml`、`miri-tb.yml`、`miri-sb.yml`，愿意的话还有 `perf.yml` 和 `coverage.yml`。`ci.yml` 保持它的结论，那正是合并所等待的结论。暂停是仓库设置，所以暂停时仓库里的文件不会有任何变化：
+
+   ```sh
+   gh workflow disable macos.yml   # 暂停
+   gh workflow enable macos.yml    # 重新启用
+   ```
+
+   发布之前把所有 workflow 都重新启用，并让它们在 `main` 上运行：`release.yml` 要求 `ci.yml` 和两个 Miri workflow 在被发布的提交上通过，而被暂停的 workflow 在该提交上没有运行记录。
+7. **发布**。在 `Cargo.toml` 中设置 `version`，把 `CHANGELOG.md` 的 `Unreleased` 小节改名为 `## X.Y.Z (YYYY-MM-DD)`，并在它上方新开一个，然后合并到 `main`。接着：
+
+   ```sh
+   gh workflow run release.yml          # 可选：打标签之前，先检查 main 是否可以发布
+   git tag -a vX.Y.Z -m vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+   `release.yml` 会检查提交、版本与标签是否一致、changelog 以及各个 workflow，然后发布，并用 changelog 的对应小节创建 GitHub Release。
 
 #### License
 
-`Template-rs` is under the terms of both the MIT license and the
+`template-rs` is under the terms of both the MIT license and the
 Apache License (Version 2.0).
 
 See [LICENSE-APACHE](LICENSE-APACHE), [LICENSE-MIT](LICENSE-MIT) for details.
@@ -40,12 +103,8 @@ See [LICENSE-APACHE](LICENSE-APACHE), [LICENSE-MIT](LICENSE-MIT) for details.
 Copyright (c) 2021 Al Liu.
 
 [Github-url]: https://github.com/al8n/template-rs/
-[CI-url]: https://github.com/al8n/template/actions/workflows/template.yml
+[CI-url]: https://github.com/al8n/template-rs/actions/workflows/ci.yml
 [doc-url]: https://docs.rs/template-rs
 [crates-url]: https://crates.io/crates/template-rs
 [codecov-url]: https://app.codecov.io/gh/al8n/template-rs/
-[license-url]: https://opensource.org/licenses/Apache-2.0
-[rustc-url]: https://github.com/rust-lang/rust/blob/master/RELEASES.md
-[license-apache-url]: https://opensource.org/licenses/Apache-2.0
-[license-mit-url]: https://opensource.org/licenses/MIT
 [en-url]: https://github.com/al8n/template-rs/tree/main/README.md

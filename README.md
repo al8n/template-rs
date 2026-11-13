@@ -23,11 +23,106 @@ English | [简体中文][zh-cn-url]
 
 ```toml
 [dependencies]
-template_rs = "0.1"
+template-rs = "0.1"
 ```
 
 ## Features
-- [x] Create a Rust open-source repo fast 
+
+| Feature | Default | What it adds |
+| --- | --- | --- |
+| `std` | yes | the standard library |
+| `alloc` | no | the heap types, without the standard library |
+
+With neither feature the crate is `no_std` and allocates nothing. The two are independent: `std`
+does not imply `alloc`, and all four combinations are valid builds.
+
+## What the template gives you
+
+A crate skeleton, and the CI/CD that the author's crates run, ready to be renamed.
+
+- **The crate.** `Cargo.toml` with the feature tiers above, `[lints]`, the docs.rs metadata and a
+  criterion bench. `src/lib.rs` is the house crate root with one item in each tier, so that every
+  tier builds and tests something; its unit tests live in a file of their own, `src/tests.rs`. The
+  placeholders `tests/foo.rs`, `examples/foo.rs` and `benches/foo.rs` are there to be replaced.
+- **The merge gate.** `ci.yml` runs on Linux only, so that its verdict arrives in tens of minutes.
+  Every slower lane is a workflow of its own, and each can be paused alone.
+- **The release.** A tag `vX.Y.Z` publishes through crates.io trusted publishing, with no token
+  stored anywhere, after checking that the commit is on `main` and green.
+- **Configuration.** `rustfmt.toml`; `.codecov.yml`, informational only, so coverage never blocks a
+  merge; `.github/dependabot.yml`; and a `CHANGELOG.md` whose structure `ci/changelog.sh` checks.
+
+| Workflow | What it runs | Pause it |
+| --- | --- | --- |
+| `ci.yml` | The merge gate, Linux only: rustfmt; clippy for each feature; build and test for every feature combination; a bare-metal `no_std` build; the MSRV; docs with `-D warnings` and the docs.rs configuration; cross builds for 15 targets; the address sanitizer; `cargo publish --dry-run`; the changelog structure | No |
+| `macos.yml`, `windows.yml` | clippy, build and test on those hosts | Yes: their runners queue for hours |
+| `miri-tb.yml`, `miri-sb.yml` | Miri under Tree Borrows and under Stacked Borrows, on six Linux targets | Yes: Miri is slow |
+| `perf.yml` | The criterion bench, run once as a smoke check | Yes |
+| `coverage.yml` | cargo-llvm-cov, uploaded to codecov | Yes |
+| `release.yml` | The release, described below | No |
+| `loc.yml` | The lines-of-code badge, written to a gist | Yes |
+
+## Starting a crate from the template
+
+1. **Create the repository** from the template, with the "Use this template" button on GitHub, and
+   clone it.
+2. **Rename it.** `git grep -n 'template[-_]rs'` lists every place the name appears:
+   - `Cargo.toml`: `name`, `repository`, `homepage`, `documentation`, `description`, `keywords` and
+     `categories`;
+   - the crate is called `template_rs` in `tests/foo.rs`, `examples/foo.rs` and `benches/foo.rs`;
+   - this README and `README-zh_CN.md`: the title, the badges and the links;
+   - `.github/workflows/loc.yml`: the file name in the gist.
+
+   Also change the copyright holder in the two license files and below. `release.yml` refuses to
+   release a package that is still named `template-rs`.
+3. **Choose what to keep.** Each of these is one line to change:
+   - `edition` and `rust-version` in `Cargo.toml`. The `msrv` job reads `rust-version`, so nothing
+     else moves with it.
+   - `REQUIRED_WORKFLOWS` in `release.yml`: the workflows that must be green on the commit a
+     release tags. Add `macos.yml` and `windows.yml` to require them too.
+   - Delete what the crate has no use for, together with its row in the table above. With no
+     benches that is `perf.yml`, `benches/`, the `[[bench]]` entry and the `criterion`
+     dev-dependency. With no wish for Miri it is `miri-tb.yml`, `miri-sb.yml` and `ci/miri_*.sh`,
+     and their names in `REQUIRED_WORKFLOWS`. Without codecov it is `coverage.yml`, `.codecov.yml`
+     and the badge.
+4. **Add the secrets**, both optional. `CODECOV_TOKEN` lets `coverage.yml` upload; without it the
+   report is still measured and the job says that it was discarded. `loc.yml` needs a gist: create
+   one, put its id in the workflow, and add a personal access token with the gist scope as the
+   secret `GIST_PAT`.
+5. **Set up crates.io, once.** crates.io can configure a trusted publisher only for a crate that
+   already exists, so the first version is published by hand:
+   - publish version `0.0.0` with `cargo login`, then `cargo publish`. It reserves the name, and
+     `release.yml` refuses `0.0.0` on purpose;
+   - on crates.io, open the crate's settings, then Trusted Publishing, and add a GitHub
+     configuration: this repository, the workflow `release.yml`, the environment `crates-io`;
+   - the GitHub environment `crates-io` is created on first use. To make a release wait for an
+     approval, add required reviewers under `Settings > Environments`.
+
+   Until this is done, a release fails with a message that says which step is missing; it never
+   skips the publish and reports success.
+6. **Pause what you do not need while you work.** `macos.yml`, `windows.yml`, `miri-tb.yml`,
+   `miri-sb.yml`, and `perf.yml` and `coverage.yml` if you like. `ci.yml` keeps its verdict, which
+   is the one a merge waits for. Pausing is a repository setting, so nothing in the repository
+   changes when you do it:
+
+   ```sh
+   gh workflow disable macos.yml   # pause
+   gh workflow enable macos.yml    # turn it back on
+   ```
+
+   Turn every lane back on before a release, and let it run on `main`: `release.yml` requires
+   `ci.yml` and both Miri workflows to be green on the commit it releases, and a paused workflow has
+   no run for that commit.
+7. **Release.** Set `version` in `Cargo.toml`, rename the `Unreleased` section of `CHANGELOG.md` to
+   `## X.Y.Z (YYYY-MM-DD)` and open a new one above it, and merge to `main`. Then:
+
+   ```sh
+   gh workflow run release.yml          # optional: check that main is releasable, before tagging
+   git tag -a vX.Y.Z -m vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+   `release.yml` checks the commit, the version against the tag, the changelog and the workflows,
+   publishes, and creates the GitHub Release from the changelog section.
 
 #### License
 

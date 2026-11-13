@@ -9,5 +9,12 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      # Check for updates to GitHub Actions every weekday
-      interval: "daily"
+      # Weekly, like cargo above: the updates arrive as one pull request, and a pull request runs
+      # every workflow. An action's update is rarely urgent, and security updates do not wait for
+      # this schedule.
+      interval: "weekly"
+    groups:
+      # Every action in one pull request, the pinned ones in release.yml and deny.yml included.
+      actions:
+        patterns:
+          - "*"

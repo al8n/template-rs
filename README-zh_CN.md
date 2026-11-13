@@ -65,7 +65,7 @@ template-rs = "0.1"
 
    还要修改两个许可证文件以及下方的版权所有者。`release.yml` 会拒绝发布仍然叫 `template-rs` 的包。
 3. **选择保留什么**。下面每一项都只需要改一行：
-   - `Cargo.toml` 中的 `edition` 和 `rust-version`。`msrv` 任务读取 `rust-version`，所以改它不需要动别处。
+   - `Cargo.toml` 中的 `edition` 和 `rust-version`。模板使用 2024 edition，它要求 `rust-version` 不低于 1.85。`msrv` 任务读取 `rust-version`，所以改它不需要动别处。
    - `release.yml` 中的 `REQUIRED_WORKFLOWS`：发布所打标签的那个提交上必须通过的 workflow。把 `macos.yml` 和 `windows.yml` 加进去，就同样要求它们通过。
    - 删掉 crate 用不上的东西，连同上表中它的那一行。没有基准测试时，就是 `perf.yml`、`benches/`、`[[bench]]` 条目和 `criterion` 开发依赖。不需要 Miri 时，就是 `miri-tb.yml`、`miri-sb.yml` 和 `ci/miri_*.sh`，以及它们在 `REQUIRED_WORKFLOWS` 中的名字。不使用 codecov 时，就是 `coverage.yml`、`.codecov.yml` 和徽章。
 4. **添加 secret**（都是可选的）。`CODECOV_TOKEN` 让 `coverage.yml` 能够上传；没有它时，报告仍会生成，任务会提示报告已被丢弃。`loc.yml` 需要一个 gist：创建一个，把它的 id 填进 workflow，并把带有 gist 权限的个人访问令牌添加为 secret `GIST_PAT`。

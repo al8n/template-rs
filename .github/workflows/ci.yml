@@ -205,7 +205,7 @@ jobs:
 
   # Every other job runs `rustup update stable`, so without this one the declared MSRV is never
   # exercised and drifts upward unnoticed. The toolchain is READ from Cargo.toml: to move the
-  # floor, edit `rust-version` and nothing else.
+  # floor, edit `rust-version` and nothing else. Edition 2024 cannot go below 1.85.
   msrv:
     name: msrv
     runs-on: ubuntu-latest
@@ -216,7 +216,7 @@ jobs:
         run: |
           version=$( { grep -m1 '^rust-version' Cargo.toml || true; } | sed -E 's/^rust-version *= *"([^"]+)".*/\1/')
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "::error::could not read a rust-version such as \"1.73\" from Cargo.toml (got '$version')"
+            echo "::error::could not read a rust-version such as \"1.85\" from Cargo.toml (got '$version')"
             exit 1
           fi
           echo "Declared MSRV: $version"
@@ -232,9 +232,11 @@ jobs:
           key: ${{ runner.os }}-msrv-${{ hashFiles('**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-msrv-
-      # The lockfile is not committed, and an old cargo resolves every dependency, dev-dependencies
-      # included, to the newest release, whatever compiler that release needs. The current cargo
-      # with the MSRV-aware resolver picks releases the floor can build.
+      # The lockfile is not committed. The current cargo resolves it, with the MSRV-aware resolver,
+      # so that dependency choice does not rest on the floor's own cargo and picks releases the
+      # floor can build, dev-dependencies included. Edition 2024 resolves that way by default
+      # (resolver 3); the variable keeps it true if the crate goes back to edition 2021. The
+      # lockfile it writes is version 4 for this floor, which cargo 1.85 reads.
       - name: Resolve dependencies for the declared MSRV
         env:
           CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: fallback

@@ -75,8 +75,9 @@ A crate skeleton, and the CI/CD that the author's crates run, ready to be rename
    Also change the copyright holder in the two license files and below. `release.yml` refuses to
    release a package that is still named `template-rs`.
 3. **Choose what to keep.** Each of these is one line to change:
-   - `edition` and `rust-version` in `Cargo.toml`. The `msrv` job reads `rust-version`, so nothing
-     else moves with it.
+   - `edition` and `rust-version` in `Cargo.toml`. The template is on edition 2024, which needs
+     `rust-version` 1.85 or later. The `msrv` job reads `rust-version`, so nothing else moves
+     with it.
    - `REQUIRED_WORKFLOWS` in `release.yml`: the workflows that must be green on the commit a
      release tags. Add `macos.yml` and `windows.yml` to require them too.
    - Delete what the crate has no use for, together with its row in the table above. With no

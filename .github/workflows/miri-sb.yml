@@ -1,0 +1,68 @@
+name: Miri (Stacked Borrows)
+
+# ── THE SLOW LANE, ONE ALIASING MODEL ───────────────────────────────────────────────────────
+#
+# Stacked Borrows, as `miri-tb.yml` is Tree Borrows, and for the same reasons: Miri sets its own
+# wall clock, so it is not part of the merge gate, and each model is its own workflow because the
+# two report different findings and are paused, and read, on their own. Read `miri-tb.yml` for why
+# no apple target is in the matrix, and why there is no `schedule` and no `-Dwarnings`.
+#
+# Pause it (Actions > Miri (Stacked Borrows) > ... > Disable workflow) while you work, and turn it
+# back on before a release: `release.yml` requires both Miri workflows to be green on the commit
+# it releases. The matrix is the same as `miri-tb.yml`'s, target for target.
+
+# Triggers, `paths-ignore` and the concurrency group are `ci.yml`'s; its comments say why.
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'COPYRIGHT'
+      - 'LICENSE-*'
+      - '**.txt'
+  pull_request:
+    paths-ignore:
+      - 'COPYRIGHT'
+      - 'LICENSE-*'
+      - '**.txt'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  miri:
+    name: miri-sb-${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - i686-unknown-linux-gnu
+          - powerpc64-unknown-linux-gnu
+          - s390x-unknown-linux-gnu
+          - riscv64gc-unknown-linux-gnu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-miri-${{ matrix.target }}-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-miri-${{ matrix.target }}-
+      - name: Miri
+        run: bash ci/miri_sb.sh "${{ matrix.target }}"

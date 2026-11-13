@@ -1,10 +1,14 @@
+# Coverage is informational here and never a gate: both statuses always pass, so a drop in
+# coverage is shown on a pull request and cannot block it.
 codecov:
   require_ci_to_pass: false
 
 ignore:
-  - "**benches/*"
-  - "**examples/*"
-  - "**tests/*"
+  - "**/benches/*"
+  - "**/examples/*"
+  - "**/tests/*"
+  - "**/tests.rs"
+  - "ci/*"
 
 coverage:
   status:
@@ -12,11 +16,13 @@ coverage:
       default:
         target: auto
         if_not_found: success
+        informational: true
         only_pulls: false
     patch: # Status for the patch in pull requests
       default:
         target: auto
         if_not_found: success
+        informational: true
         only_pulls: true
     changes: false # Whether to comment on the coverage changes in pull requests
 

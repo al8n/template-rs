@@ -1,0 +1,30 @@
+# The policy `cargo deny` checks the dependency tree against, run by `.github/workflows/deny.yml`.
+# A field that is not set here has the tool's default. The reference is
+# https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+# The default database, RustSec's. A yanked release fails the check. A fresh resolution, which is
+# all a library without a committed lockfile ever has, never picks a yanked release, so this can
+# only fire on a lockfile that was committed and has gone stale, and there it is a real finding.
+yanked = "deny"
+
+[licenses]
+# The template's own licenses, and the one criterion's tree needs besides: `unicode-ident` is
+# "(MIT OR Apache-2.0) AND Unicode-3.0". The list is derived from `cargo metadata`: each package's
+# `license` field, read as an SPDX expression. Every other package in the tree is MIT, Apache-2.0,
+# or an OR that includes one of the two. A crate adds the licenses its own dependencies need.
+allow = ["MIT", "Apache-2.0", "Unicode-3.0"]
+# criterion is a dev-dependency, which the tool skips by default because no consumer receives it.
+# Contributors and CI build it, so its tree is checked as well.
+include-dev = true
+
+[bans]
+# Two versions of one crate are worth seeing and rarely worth failing a run for.
+multiple-versions = "warn"
+
+[sources]
+# crates.io only: no other registry and no git dependency.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

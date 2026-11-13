@@ -1,0 +1,56 @@
+name: deny
+
+# ── THE DEPENDENCY LANE ─────────────────────────────────────────────────────────────────────
+#
+# cargo-deny checks the dependency tree against `deny.toml`: advisories, banned crates, licenses
+# and sources. It is a workflow of its own because one of its checks reads something that is not in
+# this repository: the RustSec advisory database changes under a crate that has not changed, so a
+# run can go red with no commit to blame, and that must neither redden `ci.yml` nor wait behind
+# it. The weekly schedule is what finds such an advisory between merges.
+#
+# It is never a required check, and the release does not ask for it: a new advisory should be
+# seen, not veto the release of code that did not change. It can be paused alone (Actions > deny
+# > ... > Disable workflow). A crate that wants no dependency policy deletes this file and
+# `deny.toml`.
+
+# Triggers and the concurrency group are `ci.yml`'s, without `paths-ignore`: the verdict depends on
+# the dependency graph and the database, and not on which files a commit touched.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+  # A `schedule` runs only the default branch's copy of the workflow.
+  schedule: [cron: "0 3 * * 1"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Two legs, as the action's README recommends, so that an advisory found by the schedule does not
+  # hide a license, ban or source failure, and the reverse: `fail-fast: false` keeps one red leg from
+  # cancelling the other. The README's `continue-on-error` on the advisories leg is for a gate; this
+  # lane is not one, and a red advisories leg is the signal it exists to give.
+  cargo-deny:
+    name: cargo-deny
+    strategy:
+      fail-fast: false
+      matrix:
+        checks:
+          - advisories
+          - bans licenses sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # A container action. Its image carries its own cargo, which reads this manifest, and its own
+      # cargo-deny, so neither is installed here. Pinned to a commit like the release's actions;
+      # dependabot keeps the pin current.
+      - name: cargo deny check ${{ matrix.checks }}
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check ${{ matrix.checks }}

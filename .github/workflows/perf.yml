@@ -1,0 +1,71 @@
+name: perf
+
+# ── THE MEASUREMENT LANE ────────────────────────────────────────────────────────────────────
+#
+# The criterion benches, each run once in test mode (`-- --test`): a smoke check that they still
+# compile and run, and not a measurement. A shared GitHub runner is far too noisy for timings that
+# mean anything, so no number is read and nothing here can regress; real timings are taken off CI.
+#
+# It is a workflow of its own because `[profile.bench]` (`opt-level = 3`, thin LTO, one codegen
+# unit) builds the crate and criterion's whole dependency tree fully optimised, which is the
+# slowest compile in the repository, and because a lane that measures is where a timing gate would
+# go if the crate ever wants one (an instruction-count or same-run A/B comparison, as in tokora and
+# smear), and it should not share a verdict with the merge gate.
+#
+# Pause it (Actions > perf > ... > Disable workflow) while you work. A crate with no benches
+# deletes this workflow together with `benches/`, the `[[bench]]` entry and the `criterion`
+# dev-dependency.
+#
+# `-Dwarnings` is not set, unlike `ci.yml`: a deprecation in criterion should not fail a smoke
+# check, and lints are `ci.yml`'s business.
+
+# Triggers, `paths-ignore` and the concurrency group are `ci.yml`'s; its comments say why. There is
+# no `schedule`: a smoke run of unchanged code proves nothing new.
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'COPYRIGHT'
+      - 'LICENSE-*'
+      - '**.txt'
+  pull_request:
+    paths-ignore:
+      - 'COPYRIGHT'
+      - 'LICENSE-*'
+      - '**.txt'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  bench-smoke:
+    name: bench (smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache cargo build and registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-bench-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-bench-
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable
+      # `--all-features` because cargo SKIPS a bench whose `required-features` are unmet instead of
+      # failing it, and a skipped bench is a green job over a bench that never ran.
+      - name: cargo bench --all-features -- --test
+        run: cargo bench --all-features -- --test

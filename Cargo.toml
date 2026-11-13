@@ -1,29 +1,47 @@
 [package]
 name = "template-rs"
 version = "0.0.0"
-edition = "2021"
+edition = "2024"
 repository = "https://github.com/al8n/template-rs"
 homepage = "https://github.com/al8n/template-rs"
 documentation = "https://docs.rs/template-rs"
 description = "A template for creating Rust open-source repo on GitHub"
 license = "MIT OR Apache-2.0"
-rust-version = "1.73"
+rust-version = "1.85"
+readme = "README.md"
+keywords = ["template"]
+categories = ["no-std", "no-std::no-alloc"]
+exclude = ["/.github/", "/ci/", "/.codecov.yml", "/deny.toml"]
 
-[[bench]]
-path = "benches/foo.rs"
-name = "foo"
-harness = false
-
+# The tiers. With no feature the crate is `no_std` and allocates nothing; `alloc` adds the heap
+# types and `std` the standard library, and the two are independent: `std` does not imply `alloc`.
+# All four combinations are valid builds, and `ci.yml` builds and tests each of them. A feature
+# for an optional dependency turns that dependency on and nothing else (`x = ["dep:x"]`), and each
+# tier forwards to it weakly (`std = ["x?/std"]`, `alloc = ["x?/alloc"]`).
 [features]
 default = ["std"]
-alloc = []
 std = []
+alloc = []
 
 [dependencies]
 
 [dev-dependencies]
 criterion = "0.8"
-tempfile = "3"
+
+[lints.rust]
+rust_2018_idioms = "warn"
+single_use_lifetimes = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }
+
+# Without `bench = false`, `cargo bench` also builds the lib under libtest's bench harness, which
+# is not what the `[[bench]]` target below, or `-- --test` in `perf.yml`, is for.
+[lib]
+bench = false
+
+[[bench]]
+path = "benches/foo.rs"
+name = "foo"
+harness = false
 
 [profile.bench]
 opt-level = 3
@@ -38,11 +56,3 @@ rpath = false
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
-
-[lints.rust]
-rust_2018_idioms = "warn"
-single_use_lifetimes = "warn"
-unexpected_cfgs = { level = "warn", check-cfg = [
-  'cfg(all_tests)',
-  'cfg(tarpaulin)',
-] }

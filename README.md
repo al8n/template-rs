@@ -15,19 +15,121 @@ A template for creating Rust open-source GitHub repo.
 [<img alt="crates.io" src="https://img.shields.io/crates/d/template-rs?color=critical&logo=data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBzdGFuZGFsb25lPSJubyI/PjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+PHN2ZyB0PSIxNjQ1MTE3MzMyOTU5IiBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHAtaWQ9IjM0MjEiIGRhdGEtc3BtLWFuY2hvci1pZD0iYTMxM3guNzc4MTA2OS4wLmkzIiB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIj48ZGVmcz48c3R5bGUgdHlwZT0idGV4dC9jc3MiPjwvc3R5bGU+PC9kZWZzPjxwYXRoIGQ9Ik00NjkuMzEyIDU3MC4yNHYtMjU2aDg1LjM3NnYyNTZoMTI4TDUxMiA3NTYuMjg4IDM0MS4zMTIgNTcwLjI0aDEyOHpNMTAyNCA2NDAuMTI4QzEwMjQgNzgyLjkxMiA5MTkuODcyIDg5NiA3ODcuNjQ4IDg5NmgtNTEyQzEyMy45MDQgODk2IDAgNzYxLjYgMCA1OTcuNTA0IDAgNDUxLjk2OCA5NC42NTYgMzMxLjUyIDIyNi40MzIgMzAyLjk3NiAyODQuMTYgMTk1LjQ1NiAzOTEuODA4IDEyOCA1MTIgMTI4YzE1Mi4zMiAwIDI4Mi4xMTIgMTA4LjQxNiAzMjMuMzkyIDI2MS4xMkM5NDEuODg4IDQxMy40NCAxMDI0IDUxOS4wNCAxMDI0IDY0MC4xOTJ6IG0tMjU5LjItMjA1LjMxMmMtMjQuNDQ4LTEyOS4wMjQtMTI4Ljg5Ni0yMjIuNzItMjUyLjgtMjIyLjcyLTk3LjI4IDAtMTgzLjA0IDU3LjM0NC0yMjQuNjQgMTQ3LjQ1NmwtOS4yOCAyMC4yMjQtMjAuOTI4IDIuOTQ0Yy0xMDMuMzYgMTQuNC0xNzguMzY4IDEwNC4zMi0xNzguMzY4IDIxNC43MiAwIDExNy45NTIgODguODMyIDIxNC40IDE5Ni45MjggMjE0LjRoNTEyYzg4LjMyIDAgMTU3LjUwNC03NS4xMzYgMTU3LjUwNC0xNzEuNzEyIDAtODguMDY0LTY1LjkyLTE2NC45MjgtMTQ0Ljk2LTE3MS43NzZsLTI5LjUwNC0yLjU2LTUuODg4LTMwLjk3NnoiIGZpbGw9IiNmZmZmZmYiIHAtaWQ9IjM0MjIiIGRhdGEtc3BtLWFuY2hvci1pZD0iYTMxM3guNzc4MTA2OS4wLmkwIiBjbGFzcz0iIj48L3BhdGg+PC9zdmc+&style=for-the-badge" height="22">][crates-url]
 <img alt="license" src="https://img.shields.io/badge/License-Apache%202.0/MIT-blue.svg?style=for-the-badge&fontColor=white&logoColor=f5c076&logo=data:image/svg+xml;base64,PCFET0NUWVBFIHN2ZyBQVUJMSUMgIi0vL1czQy8vRFREIFNWRyAxLjEvL0VOIiAiaHR0cDovL3d3dy53My5vcmcvR3JhcGhpY3MvU1ZHLzEuMS9EVEQvc3ZnMTEuZHRkIj4KDTwhLS0gVXBsb2FkZWQgdG86IFNWRyBSZXBvLCB3d3cuc3ZncmVwby5jb20sIFRyYW5zZm9ybWVkIGJ5OiBTVkcgUmVwbyBNaXhlciBUb29scyAtLT4KPHN2ZyBmaWxsPSIjZmZmZmZmIiBoZWlnaHQ9IjgwMHB4IiB3aWR0aD0iODAwcHgiIHZlcnNpb249IjEuMSIgaWQ9IkNhcGFfMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmlld0JveD0iMCAwIDI3Ni43MTUgMjc2LjcxNSIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSIgc3Ryb2tlPSIjZmZmZmZmIj4KDTxnIGlkPSJTVkdSZXBvX2JnQ2FycmllciIgc3Ryb2tlLXdpZHRoPSIwIi8+Cg08ZyBpZD0iU1ZHUmVwb190cmFjZXJDYXJyaWVyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KDTxnIGlkPSJTVkdSZXBvX2ljb25DYXJyaWVyIj4gPGc+IDxwYXRoIGQ9Ik0xMzguMzU3LDBDNjIuMDY2LDAsMCw2Mi4wNjYsMCwxMzguMzU3czYyLjA2NiwxMzguMzU3LDEzOC4zNTcsMTM4LjM1N3MxMzguMzU3LTYyLjA2NiwxMzguMzU3LTEzOC4zNTcgUzIxNC42NDgsMCwxMzguMzU3LDB6IE0xMzguMzU3LDI1OC43MTVDNzEuOTkyLDI1OC43MTUsMTgsMjA0LjcyMywxOCwxMzguMzU3UzcxLjk5MiwxOCwxMzguMzU3LDE4IHMxMjAuMzU3LDUzLjk5MiwxMjAuMzU3LDEyMC4zNTdTMjA0LjcyMywyNTguNzE1LDEzOC4zNTcsMjU4LjcxNXoiLz4gPHBhdGggZD0iTTE5NC43OTgsMTYwLjkwM2MtNC4xODgtMi42NzctOS43NTMtMS40NTQtMTIuNDMyLDIuNzMyYy04LjY5NCwxMy41OTMtMjMuNTAzLDIxLjcwOC0zOS42MTQsMjEuNzA4IGMtMjUuOTA4LDAtNDYuOTg1LTIxLjA3OC00Ni45ODUtNDYuOTg2czIxLjA3Ny00Ni45ODYsNDYuOTg1LTQ2Ljk4NmMxNS42MzMsMCwzMC4yLDcuNzQ3LDM4Ljk2OCwyMC43MjMgYzIuNzgyLDQuMTE3LDguMzc1LDUuMjAxLDEyLjQ5NiwyLjQxOGM0LjExOC0yLjc4Miw1LjIwMS04LjM3NywyLjQxOC0xMi40OTZjLTEyLjExOC0xNy45MzctMzIuMjYyLTI4LjY0NS01My44ODItMjguNjQ1IGMtMzUuODMzLDAtNjQuOTg1LDI5LjE1Mi02NC45ODUsNjQuOTg2czI5LjE1Miw2NC45ODYsNjQuOTg1LDY0Ljk4NmMyMi4yODEsMCw0Mi43NTktMTEuMjE4LDU0Ljc3OC0zMC4wMDkgQzIwMC4yMDgsMTY5LjE0NywxOTguOTg1LDE2My41ODIsMTk0Ljc5OCwxNjAuOTAzeiIvPiA8L2c+IDwvZz4KDTwvc3ZnPg==" height="22">
 
-English | [简体中文][zh-cn-url]
-
 </div>
 
 ## Installation
 
 ```toml
 [dependencies]
-template_rs = "0.1"
+template-rs = "0.1"
 ```
 
 ## Features
-- [x] Create a Rust open-source repo fast 
+
+| Feature | Default | What it adds |
+| --- | --- | --- |
+| `std` | yes | the standard library |
+| `alloc` | no | the heap types, without the standard library |
+
+With neither feature the crate is `no_std` and allocates nothing. The two are independent: `std`
+does not imply `alloc`, and all four combinations are valid builds.
+
+## What the template gives you
+
+A crate skeleton, and the CI/CD that the author's crates run, ready to be renamed.
+
+- **The crate.** `Cargo.toml` with the feature tiers above, `[lints]`, the docs.rs metadata and a
+  criterion bench. `src/lib.rs` is the house crate root with one item in each tier, so that every
+  tier builds and tests something; its unit tests live in a file of their own, `src/tests.rs`. The
+  placeholders `tests/foo.rs`, `examples/foo.rs` and `benches/foo.rs` are there to be replaced.
+- **The merge gate.** `ci.yml` runs on Linux only, so that its verdict arrives in tens of minutes.
+  Every slower lane is a workflow of its own, and each can be paused alone.
+- **The release.** A tag `vX.Y.Z` publishes through crates.io trusted publishing, with no token
+  stored anywhere, after checking that the commit is on `main` and green.
+- **Configuration.** `rustfmt.toml`; `.codecov.yml`, informational only, so coverage never blocks a
+  merge; `deny.toml`, the cargo-deny policy; `.github/dependabot.yml`; and a `CHANGELOG.md` whose
+  structure `ci/changelog.sh` checks.
+
+| Workflow | What it runs | Pause it |
+| --- | --- | --- |
+| `ci.yml` | The merge gate, Linux only: rustfmt; clippy for each feature; build and test for every feature combination; a bare-metal `no_std` build; the MSRV; docs with `-D warnings` and the docs.rs configuration; cross builds for 15 targets; the address sanitizer; `cargo publish --dry-run`; the changelog structure | No |
+| `macos.yml`, `windows.yml` | clippy, build and test on those hosts | Yes: their runners queue for hours. The release asks for them |
+| `miri-tb.yml`, `miri-sb.yml` | Miri under Tree Borrows and under Stacked Borrows, on six Linux targets | Yes: Miri is slow. The release asks for them |
+| `perf.yml` | The criterion bench, run once as a smoke check | Yes |
+| `coverage.yml` | cargo-llvm-cov, uploaded to codecov | Yes |
+| `deny.yml` | cargo-deny against `deny.toml`: advisories, bans, licenses and sources, weekly as well | Yes: it is never required, and the release does not ask for it |
+| `release.yml` | The release, described below | No |
+| `loc.yml` | The lines-of-code badge, written to a gist | Yes |
+
+## Starting a crate from the template
+
+1. **Create the repository** from the template, with the "Use this template" button on GitHub, and
+   clone it.
+2. **Rename it.** `git grep -n 'template[-_]rs'` lists every place the name appears:
+   - `Cargo.toml`: `name`, `repository`, `homepage`, `documentation`, `description`, `keywords` and
+     `categories`;
+   - the crate is called `template_rs` in `tests/foo.rs`, `examples/foo.rs` and `benches/foo.rs`;
+   - this README: the title, the badges and the links;
+   - `.github/workflows/loc.yml`: the file name in the gist.
+
+   Also change the copyright holder in the two license files and below. `release.yml` refuses to
+   release a package that is still named `template-rs`.
+3. **Choose what to keep.** Each of these is one line to change:
+   - `edition` and `rust-version` in `Cargo.toml`. The template is on edition 2024, which needs
+     `rust-version` 1.85 or later. The `msrv` job reads `rust-version`, so nothing else moves
+     with it.
+   - `REQUIRED_WORKFLOWS` in `release.yml`: the workflows that must be green on the commit a
+     release tags, which are `ci.yml`, both Miri workflows, `macos.yml` and `windows.yml`. Drop the
+     name of a lane the crate does not have.
+   - `allow` in `deny.toml`: the licenses the crate's dependencies may have. It lists the template's
+     own and the one criterion's tree needs; add what your dependencies need.
+   - Delete what the crate has no use for, together with its row in the table above. With no
+     benches that is `perf.yml`, `benches/`, the `[[bench]]` entry and the `criterion`
+     dev-dependency. With no wish for Miri it is `miri-tb.yml`, `miri-sb.yml` and `ci/miri_*.sh`,
+     and their names in `REQUIRED_WORKFLOWS`. Without codecov it is `coverage.yml`, `.codecov.yml`
+     and the badge. Without cargo-deny it is `deny.yml` and `deny.toml`.
+4. **Add the secrets**, both optional. `CODECOV_TOKEN` lets `coverage.yml` upload; without it the
+   report is still measured and the job says that it was discarded. `loc.yml` needs a gist: create
+   one, put its id in the workflow, and add a personal access token with the gist scope as the
+   secret `GIST_PAT`.
+5. **Set up crates.io, once.** crates.io can configure a trusted publisher only for a crate that
+   already exists, so the first version is published by hand:
+   - publish version `0.0.0` with `cargo login`, then `cargo publish`. It reserves the name, and
+     `release.yml` refuses `0.0.0` on purpose;
+   - on crates.io, open the crate's settings, then Trusted Publishing, and add a GitHub
+     configuration: this repository, the workflow `release.yml`, the environment `crates-io`;
+   - the GitHub environment `crates-io` is created on first use. To make a release wait for an
+     approval, add required reviewers under `Settings > Environments`.
+
+   Until this is done, a release fails with a message that says which step is missing; it never
+   skips the publish and reports success.
+6. **Pause what you do not need while you work.** `macos.yml`, `windows.yml`, `miri-tb.yml`,
+   `miri-sb.yml`, and `perf.yml` and `coverage.yml` if you like. `ci.yml` keeps its verdict, which
+   is the one a merge waits for. Pausing is a repository setting, so nothing in the repository
+   changes when you do it:
+
+   ```sh
+   gh workflow disable macos.yml          # pause
+   gh workflow enable macos.yml           # turn it back on
+   gh workflow run macos.yml --ref main   # run it on main, if main moved while it was off
+   ```
+
+   Turn every lane back on before a release, and let it run on `main`: `release.yml` requires
+   `ci.yml`, both Miri workflows, `macos.yml` and `windows.yml` to be green on the commit it
+   releases, and a paused workflow has no run for that commit.
+7. **Release.** Set `version` in `Cargo.toml`, rename the `Unreleased` section of `CHANGELOG.md` to
+   `## X.Y.Z (YYYY-MM-DD)` and open a new one above it, and merge to `main`. Then:
+
+   ```sh
+   gh workflow run release.yml          # optional: check that main is releasable, before tagging
+   git tag -a vX.Y.Z -m vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+   `release.yml` checks the commit, the version against the tag, the changelog and the workflows,
+   publishes, and creates the GitHub Release from the changelog section. Run the optional first
+   command after a lane was paused: it fails naming the required workflow that has no green run on
+   the commit.
 
 #### License
 
@@ -43,4 +145,3 @@ Copyright (c) 2021 Al Liu.
 [doc-url]: https://docs.rs/template-rs
 [crates-url]: https://crates.io/crates/template-rs
 [codecov-url]: https://app.codecov.io/gh/al8n/template-rs/
-[zh-cn-url]: https://github.com/al8n/template-rs/tree/main/README-zh_CN.md

@@ -1,0 +1,278 @@
+name: Release
+
+# ── RELEASE, THROUGH CRATES.IO TRUSTED PUBLISHING ───────────────────────────────────────────
+#
+# Pushing a tag `vX.Y.Z` releases version X.Y.Z. No token is stored anywhere: the `publish` job
+# exchanges its GitHub OIDC identity for a short-lived crates.io token
+# (`rust-lang/crates-io-auth-action`), and crates.io honours that only for the repository, workflow
+# and environment configured for the crate.
+#
+# ONE-TIME SETUP, per crate (the README has the same list):
+#
+#   1. crates.io can configure a trusted publisher only for a crate that already exists. Publish
+#      version 0.0.0 by hand (`cargo login`, then `cargo publish`). It reserves the name, and this
+#      workflow refuses 0.0.0 on purpose.
+#   2. On crates.io, open the crate's Settings > Trusted Publishing and add a GitHub configuration:
+#      this repository, workflow `release.yml`, environment `crates-io`.
+#   3. On GitHub, Settings > Environments > `crates-io`. It is created on first use; add required
+#      reviewers there if a release should wait for an approval.
+#
+# Until that is done a release fails, in `verify` or at the token exchange, with a message that says
+# which step is missing. It never skips the publish and reports success.
+#
+# WHAT A RELEASE REQUIRES, checked by `verify` before anything is published:
+#
+#   * the tagged commit is on `main`;
+#   * every workflow in REQUIRED_WORKFLOWS has a green run on `main` for that exact commit. That is
+#     `ci.yml`, the two Miri workflows, `macos.yml` and `windows.yml`. A paused workflow has no such
+#     run: enable it, and run it on `main` (`gh workflow run macos.yml --ref main`) before tagging.
+#     Drop a lane the crate does not have from the list;
+#   * the version in Cargo.toml is the tag without its `v`, is not the placeholder `0.0.0`, and is
+#     not on crates.io yet;
+#   * CHANGELOG.md has a dated section for the version (`ci/changelog.sh release`), which becomes
+#     the GitHub Release notes;
+#   * `cargo publish --dry-run` passes.
+#
+# `workflow_dispatch` runs `verify` alone, on `main`, before the tag exists: `gh workflow run
+# release.yml`. It never publishes, and it is the way to find out whether `main` is releasable.
+#
+# The jobs that hold authority are separate, and each declares only what it needs: `publish` has
+# the OIDC token and cannot write to the repository, `github-release` can write to the repository
+# and has no token for crates.io. The two third-party actions are pinned to commits, because this
+# is the one workflow that can publish; dependabot keeps the pins current.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions: {}
+
+# A release is irreversible: never cancel one in favour of another, and never let two overlap.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  # The branch a release comes from, and the workflows (file names, space separated) that must be
+  # green on the released commit. Each is a one-line change.
+  MAIN_BRANCH: main
+  REQUIRED_WORKFLOWS: ci.yml miri-tb.yml miri-sb.yml macos.yml windows.yml
+
+jobs:
+  verify:
+    name: Verify the release
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      name: ${{ steps.release.outputs.name }}
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          # All branches and tags: the check that the commit is on `main` needs `main`'s history.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: Verify
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$*"
+            exit 1
+          }
+
+          # What is being released.
+          metadata=$(cargo metadata --no-deps --format-version 1)
+          packages=$(jq -c '[.packages[] | select(.publish == null or (.publish | index("crates-io")))]' <<<"$metadata")
+          [[ $(jq length <<<"$packages") == 1 ]] \
+            || fail "expected exactly one package that can be published to crates.io, found: $(jq -r 'map(.name) | join(", ")' <<<"$packages")"
+          name=$(jq -r '.[0].name' <<<"$packages")
+          version=$(jq -r '.[0].version' <<<"$packages")
+          tag="v$version"
+
+          [[ "$name" != template-rs ]] \
+            || fail "the package is still named template-rs. Rename it in Cargo.toml before releasing; the README lists what else carries the name."
+          [[ "$version" != 0.0.0 ]] \
+            || fail "0.0.0 is the placeholder version. It is published by hand to reserve the name (see the header of release.yml); release 0.1.0 or later through this workflow."
+
+          # What triggered this run.
+          case "$GITHUB_EVENT_NAME" in
+            push)
+              [[ "$GITHUB_REF_TYPE" == tag ]] || fail "a release is triggered by a tag push"
+              [[ "$GITHUB_REF_NAME" == "$tag" ]] \
+                || fail "the tag is $GITHUB_REF_NAME, but Cargo.toml says version $version, so the tag must be $tag"
+              ;;
+            workflow_dispatch)
+              [[ "$GITHUB_REF" == "refs/heads/$MAIN_BRANCH" ]] || fail "dispatch this workflow on $MAIN_BRANCH, not on $GITHUB_REF"
+              if git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null; then
+                fail "tag $tag exists already. A dispatch is the check made before tagging."
+              fi
+              ;;
+            *) fail "unsupported event $GITHUB_EVENT_NAME" ;;
+          esac
+
+          # The commit is on `main`.
+          git rev-parse --quiet --verify "origin/$MAIN_BRANCH^{commit}" >/dev/null \
+            || fail "origin/$MAIN_BRANCH is not in this checkout, so the commit cannot be placed on $MAIN_BRANCH"
+          git merge-base --is-ancestor "$GITHUB_SHA" "origin/$MAIN_BRANCH" \
+            || fail "commit ${GITHUB_SHA:0:12} is not on $MAIN_BRANCH. Tag a commit that has been merged."
+
+          # The changelog has a section for it.
+          bash ci/changelog.sh release "$version" \
+            || fail "CHANGELOG.md needs a dated section for $version: rename the Unreleased section to \"## $version (YYYY-MM-DD)\" and open a new one above it."
+
+          # The workflows that must be green on this commit.
+          require_green() {
+            local workflow=$1 runs
+            runs=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" \
+              -f branch="$MAIN_BRANCH" -f head_sha="$GITHUB_SHA" -f per_page=100) \
+              || fail "could not read the runs of $workflow. Is the file name in REQUIRED_WORKFLOWS right?"
+            jq -e --arg sha "$GITHUB_SHA" --arg branch "$MAIN_BRANCH" '
+              any(.workflow_runs[];
+                .head_sha == $sha
+                and .head_branch == $branch
+                and .status == "completed"
+                and .conclusion == "success"
+                and (.event == "push" or .event == "workflow_dispatch" or .event == "schedule"))
+            ' <<<"$runs" >/dev/null \
+              || fail "$workflow has no green run on $MAIN_BRANCH for commit ${GITHUB_SHA:0:12}. If it is paused, enable it, then run it on $MAIN_BRANCH with: gh workflow run $workflow --ref $MAIN_BRANCH"
+          }
+          for workflow in $REQUIRED_WORKFLOWS; do
+            require_green "$workflow"
+            echo "ok: $workflow is green on ${GITHUB_SHA:0:12}"
+          done
+
+          # crates.io: the crate must exist, because trusted publishing cannot be configured for one
+          # that does not, and this version must not.
+          crate_json="$RUNNER_TEMP/crate.json"
+          status=$(curl --silent --show-error --output "$crate_json" --write-out '%{http_code}' \
+            --user-agent "release-workflow ($GITHUB_REPOSITORY)" \
+            "https://crates.io/api/v1/crates/$name") || fail "could not reach crates.io"
+          case "$status" in
+            200) ;;
+            404)
+              echo "::error title=$name is not on crates.io yet::Trusted publishing can only be configured for a crate that exists, so the first version is published by hand."
+              cat <<EOF
+
+          To release $name through this workflow:
+            1. From a checkout whose Cargo.toml says version = "0.0.0": run cargo login, then cargo publish.
+               Version 0.0.0 reserves the name; this workflow refuses to release it.
+            2. On crates.io, open the crate's Settings > Trusted Publishing and add a GitHub configuration:
+                 repository   $GITHUB_REPOSITORY
+                 workflow     release.yml
+                 environment  crates-io
+            3. Set the version to release in Cargo.toml and CHANGELOG.md, merge to $MAIN_BRANCH, and tag again.
+          EOF
+              exit 1
+              ;;
+            *) fail "crates.io answered HTTP $status for $name; try again" ;;
+          esac
+          if jq -e --arg v "$version" 'any(.versions[]; .num == $v)' "$crate_json" >/dev/null; then
+            fail "$name $version is on crates.io already, and a version cannot be published twice. Bump the version."
+          fi
+
+          # The package builds from its own tarball.
+          cargo publish --dry-run
+
+          {
+            echo "name=$name"
+            echo "version=$version"
+            echo "tag=$tag"
+          } >>"$GITHUB_OUTPUT"
+          echo "Verified $name $version for $tag at ${GITHUB_SHA:0:12}" >>"$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish to crates.io
+    needs: verify
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable
+      # `continue-on-error`, so that a refused exchange reaches the next step and is explained
+      # there. The action's own message names no remedy.
+      - name: Exchange the workflow's identity for a crates.io token
+        id: auth
+        continue-on-error: true
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+      - name: Trusted publishing is not set up, so nothing was published
+        if: steps.auth.outcome != 'success'
+        env:
+          NAME: ${{ needs.verify.outputs.name }}
+        run: |
+          echo "::error title=crates.io refused this workflow's identity::No token was issued and nothing was published. Trusted publishing is not set up for $NAME, or its configuration does not match this run."
+          cat <<EOF
+
+          On crates.io, the crate's Settings > Trusted Publishing needs a GitHub configuration with
+          exactly:
+            repository   $GITHUB_REPOSITORY
+            workflow     release.yml
+            environment  crates-io
+
+          A crate with no such configuration yet has to publish its first version by hand, because
+          crates.io cannot configure a trusted publisher before the crate exists: run cargo publish
+          with version 0.0.0, then add the configuration above. Then re-run this job.
+          EOF
+          exit 1
+      - name: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "::error::the token exchange succeeded but returned no token, so there is nothing to publish with"
+            exit 1
+          fi
+          cargo publish
+
+  github-release:
+    name: Create the GitHub Release
+    needs: [verify, publish]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: gh release create
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "GitHub Release $TAG exists already"
+            exit 0
+          fi
+          bash ci/changelog.sh notes "$VERSION" >"$RUNNER_TEMP/notes.md"
+          args=("$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md")
+          case "$VERSION" in
+            *-*) args+=(--prerelease) ;;
+          esac
+          gh release create "${args[@]}"

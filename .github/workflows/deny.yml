@@ -51,6 +51,6 @@ jobs:
       # cargo-deny, so neither is installed here. Pinned to a commit like the release's actions;
       # dependabot keeps the pin current.
       - name: cargo deny check ${{ matrix.checks }}
-        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        uses: EmbarkStudios/cargo-deny-action@17aeb3c839e42274e2b8adf721c8c65edfdc74dd # v2.1.3
         with:
           command: check ${{ matrix.checks }}
